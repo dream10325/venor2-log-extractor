@@ -1,2 +1,2 @@
-# venor2-log-extractor
-自用
+venor2自用模組log提取器
+要不要玩
