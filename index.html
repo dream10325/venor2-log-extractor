@@ -439,7 +439,7 @@ function parseLog(text){
       const channel = normalizeChannel(m[3]);
       const player = m[4];
       const rawId = m[5];
-      const actionText = `* ${m[6]}`;
+      const actionText = `* ${player} ${m[6]}`;
       result.push({type:'action', date, player, rawId, text:actionText, raw:actionText, channel});
       continue;
     }
