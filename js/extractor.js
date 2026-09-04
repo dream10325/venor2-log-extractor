@@ -1,5 +1,3 @@
-//提取log部分
-
 const MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
 
 const SERVER_CHAT_RE = /^\[(?:(\d{1,2}[A-Za-z]{3}\d{4})\s+)?(\d{2}:\d{2}:\d{2})(?:\.\d+)?\] \[[^\]]*\] \[nicknameforge\/\]: \[([^\]]+)\]\s*<(.+)>\{([^}]*)\}\s?(.*)$/;
@@ -49,7 +47,6 @@ function parseLog(text){
   }
 
   const result = [];
-  let cleanSeq = 0;
   for(const rawLine of lines){
     const line = rawLine.replace(/\r$/, '');
     if(!line.trim()) continue;
@@ -70,7 +67,7 @@ function parseLog(text){
       const channel = normalizeChannel(m[3]);
       const player = m[4];
       const rawId = m[5];
-      const actionText = m[6];
+      const actionText = `* ${player} ${m[6]}`;
       result.push({type:'action', date, player, rawId, text:actionText, raw:actionText, channel});
       continue;
     }
@@ -113,19 +110,6 @@ function parseLog(text){
       result.push({type:'action', date, player:null, text:m[2], raw:m[2], channel:null});
       continue;
     }
-
-    m = line.match(/^<(.+?)>\s?(.*)$/);
-    cleanSeq += 1;
-    const cleanDate = new Date(2000, 0, 1, 0, 0, cleanSeq % 86400);
-    if(m){
-      const player = m[1].trim();
-      const text_ = m[2];
-      if(/^-{2,}.*-{2,}$/.test(text_.trim())) continue;
-      result.push({type:'chat', date:cleanDate, player, text:text_, channel:null, raw: `<${player}> ${text_}`});
-      continue;
-    }
-    if(/^-{2,}.*-{2,}$/.test(line.trim())) continue;
-    result.push({type:'action', date:cleanDate, player:null, text:line.trim(), raw:line.trim(), channel:null});
   }
   attributeActionPlayers(result);
   return result;
@@ -146,27 +130,8 @@ function attributeActionPlayers(list){
         break;
       }
     }
-    if(matched){
-      e.player = matched;
-      e.text = stripActionName(e.text, matched);
-    } else {
-      e.text = stripActionMarker(e.text);
-    }
-    e.raw = e.text;
+    e.player = matched;
   }
-}
-
-function stripActionMarker(text){
-  return text.replace(/^\*[ \u3000]*/, '');
-}
-
-function stripActionName(text, name){
-  const prefixes = [`* ${name} `, `* ${name}\u3000`];
-  for(const p of prefixes){
-    if(text.startsWith(p)) return text.slice(p.length);
-  }
-  if(text === `* ${name}`) return '';
-  return stripActionMarker(text);
 }
 
 let selectedPlayers = new Set();
