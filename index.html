@@ -4,280 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>提取RP紀錄的</title>
-<style>
-  :root{
-    --bg: #f0f2f5;
-    --panel: #ffffff;
-    --panel-2: #f2f2f2;
-    --line: #999999;
-    --text: #000000;
-    --dim: #666666;
-    --accent: #800020;
-    --accent-2: #008000;
-    --danger: #ff0000;
-    --mono: "Courier New", monospace;
-    --sans: Arial, "Microsoft JhengHei", sans-serif;
-  }
-  *{box-sizing:border-box;}
-  body{
-    margin:0;
-    background: var(--bg);
-    color:var(--text);
-    font-family:var(--sans);
-    min-height:100vh;
-    padding:28px 20px 60px;
-  }
-  .wrap{max-width:1180px;margin:0 auto;}
-  header{margin-bottom:22px;}
-  h1{
-    font-size:26px;
-    margin:0 0 6px;
-    font-weight:700;
-    letter-spacing:-0.01em;
-  }
-  header p{color:var(--dim); margin:0; font-size:14px; line-height:1.6;}
-
-  .grid{
-    display:grid;
-    grid-template-columns: 1.1fr 1.4fr;
-    gap:18px;
-    align-items:start;
-  }
-  @media (max-width: 980px){ .grid{grid-template-columns: 1fr;} }
-
-  .card{
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:18px;
-  }
-  .card h2{
-    font-size:13px;
-    text-transform:uppercase;
-    letter-spacing:.08em;
-    color:var(--dim);
-    margin:0 0 14px;
-    display:flex;
-    align-items:center;
-    gap:8px;
-  }
-  .card h2 .n{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    width:18px;height:18px;
-    border-radius:4px;
-    background:var(--accent);
-    color:#ffffff;
-    font-family:var(--mono);
-    font-size:11px;
-    font-weight:700;
-  }
-
-  textarea{
-    width:100%;
-    min-height:180px;
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:8px;
-    color:var(--text);
-    font-family:var(--mono);
-    font-size:12.5px;
-    line-height:1.55;
-    padding:12px;
-    resize:vertical;
-  }
-  textarea:focus, input:focus, select:focus{
-    outline:none;
-    border-color:var(--accent);
-  }
-
-  .row{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;}
-  .row.between{justify-content:space-between; align-items:center;}
-
-  .filebtn{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    background:var(--panel-2);
-    border:1px dashed var(--line);
-    color:var(--dim);
-    padding:9px 14px;
-    border-radius:8px;
-    font-size:13px;
-    cursor:pointer;
-    transition:.15s border-color, .15s color;
-  }
-  .filebtn:hover{border-color:var(--accent); color:var(--text);}
-  input[type=file]{display:none;}
-  .filename{font-size:12px; color:var(--dim); font-family:var(--mono);}
-
-  .dropzone{
-    border:1px dashed var(--line);
-    border-radius:8px;
-    padding:12px;
-    transition:.15s border-color, .15s background;
-  }
-  .dropzone.dragover{
-    border-color:var(--accent);
-    background:#fff5f7;
-  }
-  .dropzone-hint{
-    margin:8px 0 0;
-    font-size:11.5px;
-    color:var(--dim);
-    line-height:1.5;
-  }
-
-  label.field{display:block; font-size:12px; color:var(--dim); margin:14px 0 6px;}
-  input[type=text], input[type=datetime-local]{
-    width:100%;
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:7px;
-    color:var(--text);
-    padding:8px 10px;
-    font-family:var(--mono);
-    font-size:12.5px;
-  }
-  .timegrid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px;}
-  .timegrid2{grid-template-columns:repeat(2,1fr); max-width:220px;}
-  .timefield{display:flex; flex-direction:column; gap:4px;}
-  .timefield span{font-size:11px; color:var(--dim); font-family:var(--mono);}
-  .timefield input{
-    width:100%;
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:7px;
-    color:var(--text);
-    padding:8px 6px;
-    font-family:var(--mono);
-    font-size:13px;
-    text-align:center;
-  }
-  .timefield input:focus{outline:none; border-color:var(--accent);}
-
-  .toggle{
-    display:flex; align-items:center; gap:8px;
-    font-size:13px; color:var(--text);
-    padding:8px 0;
-    cursor:pointer;
-    user-select:none;
-  }
-  .toggle input{accent-color:var(--accent); width:15px; height:15px;}
-
-  .radiorow{display:flex; gap:16px; margin-top:6px; margin-bottom:10px;}
-  .radiobtn{
-    display:flex; align-items:center; gap:6px;
-    font-size:13px; cursor:pointer; color:var(--text);
-  }
-  .radiobtn input{accent-color:var(--accent);}
-  .chipbox{
-    display:flex; flex-wrap:wrap; gap:6px;
-    margin-top:8px;
-  }
-  .chip{
-    font-family:var(--mono);
-    font-size:11.5px;
-    background:var(--panel);
-    border:1px solid var(--line);
-    color:var(--dim);
-    padding:4px 9px;
-    border-radius:20px;
-    cursor:pointer;
-  }
-  .chip:hover{color:var(--accent); border-color:var(--accent);}
-  .chip.active{color:#ffffff; background:var(--accent); border-color:var(--accent);}
-
-  .playerbox{
-    max-height:190px;
-    overflow-y:auto;
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:8px;
-    padding:6px;
-    margin-top:8px;
-  }
-  .playerbox label{
-    display:flex; align-items:center; gap:7px;
-    font-family:var(--mono);
-    font-size:12px;
-    padding:5px 6px;
-    border-radius:5px;
-    cursor:pointer;
-  }
-  .playerbox label:hover{background:#232c27;}
-  .playerbox input{accent-color:var(--accent);}
-  .playerbox .cnt{color:var(--dim); margin-left:auto;}
-  .empty-hint{color:var(--dim); font-size:12px; padding:8px 4px; font-style:italic;}
-
-  .btn{
-    border:none;
-    border-radius:8px;
-    padding:10px 18px;
-    font-size:13.5px;
-    font-weight:600;
-    cursor:pointer;
-    font-family:var(--sans);
-    transition:.15s transform, .15s opacity;
-  }
-  .btn:active{transform:scale(.97);}
-  .btn-primary{background:var(--accent); color:#ffffff;}
-  .btn-ghost{background:transparent; color:var(--dim); border:1px solid var(--line);}
-  .btn-ghost:hover{color:var(--text); border-color:var(--accent);}
-  .btn:disabled{opacity:.4; cursor:not-allowed;}
-
-  .smallbtns{display:flex; gap:8px; margin-top:8px;}
-  .smallbtns button{
-    background:var(--panel);
-    border:1px solid var(--line);
-    color:var(--dim);
-    font-size:11.5px;
-    padding:5px 9px;
-    border-radius:6px;
-    cursor:pointer;
-    font-family:var(--sans);
-  }
-  .smallbtns button:hover{color:var(--accent); border-color:var(--accent);}
-
-  .stats{
-    font-family:var(--mono);
-    font-size:12px;
-    color:var(--dim);
-    display:flex;
-    gap:16px;
-    flex-wrap:wrap;
-  }
-  .stats b{color:var(--accent);}
-
-  #output{
-    width:100%;
-    height:560px;
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:8px;
-    padding:14px;
-    font-family:var(--mono);
-    font-size:12.5px;
-    line-height:1.7;
-    overflow-y:auto;
-    white-space:pre-wrap;
-    word-break:break-word;
-  }
-  #output .chat-name{color:var(--accent-2); font-weight:600;}
-  #output .action-line{color:var(--accent); font-style:italic;}
-  #output .placeholder{color:var(--dim); font-style:italic;}
-
-  .footer-actions{display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;}
-  .tag{
-    font-family:var(--mono);
-    font-size:11px;
-    color:var(--dim);
-    border:1px solid var(--line);
-    padding:2px 7px;
-    border-radius:5px;
-  }
-</style>
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div class="wrap">
@@ -297,7 +24,7 @@
             </label>
             <span class="filename" id="fileName">尚未選擇檔案</span>
           </div>
-          <p class="dropzone-hint">也可以直接把.log跟.log.gz檔案拖曳到這裡</p>
+          <p class="dropzone-hint">可以直接把.log跟.log.gz檔案拖曳到這裡，也可以丟已經篩過的txt</p>
         </div>
         <label class="field">或直接貼上文字：</label>
         <textarea id="rawInput" placeholder="將原始log內容貼在這裡"></textarea>
@@ -363,490 +90,119 @@
         <div class="footer-actions">
           <button class="btn btn-ghost" id="copyBtn" type="button">複製</button>
           <button class="btn btn-ghost" id="downloadBtn" type="button">下載</button>
+          <label class="btn btn-ghost" id="importPlayBtn">
+            匯入播放檔案（HTML）
+            <input type="file" id="importPlayInput" accept=".html,.htm">
+          </label>
+          <button class="btn btn-primary" id="playBtn" type="button">播放log</button>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<script>
-const MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+<!-- 設定文字劇情部分 -->
+<div id="playerView" hidden>
+  <div class="player-topbar">
+    <button class="btn btn-ghost" id="exitPlayerBtn" type="button">← 返回編輯</button>
+    <div class="player-topbar-title">劇情播放模式</div>
+    <button class="btn btn-ghost" id="togglePanelBtn" type="button">⚙ 設定面板</button>
+  </div>
 
-const SERVER_CHAT_RE = /^\[(?:(\d{1,2}[A-Za-z]{3}\d{4})\s+)?(\d{2}:\d{2}:\d{2})(?:\.\d+)?\] \[[^\]]*\] \[nicknameforge\/\]: \[([^\]]+)\]\s*<(.+)>\{([^}]*)\}\s?(.*)$/;
-const SERVER_ACTION_RE = /^\[(?:(\d{1,2}[A-Za-z]{3}\d{4})\s+)?(\d{2}:\d{2}:\d{2})(?:\.\d+)?\] \[[^\]]*\] \[nicknameforge\/\]: \[([^\]]+)\] \* <(.+)>\{([^}]*)\} (.*)$/;
-const LEGACY_ACTION_RE = /^\[(\d{1,2}[A-Za-z]{3}\d{4}) (\d{2}:\d{2}:\d{2})\.\d+\] \[Server thread\/INFO\] \[net\.minecraft\.server\.MinecraftServer\/\]: (?:\[Not Secure\] )?(\*.*)$/;
+  <div class="player-body">
+    <div class="stage" id="stage">
+      <div class="stage-bg" id="stageBg"></div>
 
-const CLIENT_CHAT_RE_CHANNEL = /^\[(\d{2}:\d{2}:\d{2})\] \[Render thread\/INFO\]: \[System\] \[CHAT\] \[([^\]]+)\] (.+)$/;
-const CLIENT_CHAT_RE = /^\[(\d{2}:\d{2}:\d{2})\] \[Render thread\/INFO\]: \[System\] \[CHAT\] (.+?) \? (.*)$/;
-const CLIENT_ACTION_RE_CHANNEL = /^\[(\d{2}:\d{2}:\d{2})\] \[Render thread\/INFO\]: (?:\[Not Secure\] )?(?:\[System\] )?\[CHAT\] \[([^\]]+)\] (\*.*)$/;
-const CLIENT_ACTION_RE = /^\[(\d{2}:\d{2}:\d{2})\] \[Render thread\/INFO\]: (?:\[Not Secure\] )?(?:\[System\] )?\[CHAT\] (\*.*)$/;
-const CHAT_NAME_MSG_SPLIT_RE = / {3,}/;
+      <div class="portrait-slot portrait-left" id="portraitLeft"><img id="portraitLeftImg" alt=""></div>
+      <div class="portrait-slot portrait-center" id="portraitCenter"><img id="portraitCenterImg" alt=""></div>
+      <div class="portrait-slot portrait-right" id="portraitRight"><img id="portraitRightImg" alt=""></div>
 
-let entries = [];
+      <div class="vn-click-catcher" id="vnClickCatcher" title="點擊／空白鍵 繼續"></div>
 
-function parseLogDate(dateStr, timeStr){
-  const m = dateStr.match(/^(\d{1,2})([A-Za-z]{3})(\d{4})$/);
-  if(!m) return null;
-  const day = parseInt(m[1],10);
-  const month = MONTHS[m[2]];
-  const year = parseInt(m[3],10);
-  const [hh,mm,ss] = timeStr.split(':').map(Number);
-  if(month === undefined) return null;
-  return new Date(year, month, day, hh, mm, ss);
-}
+      <div class="vn-box" id="vnBox">
+        <div class="vn-name" id="vnName"></div>
+        <div class="vn-text" id="vnText"></div>
+        <span class="vn-continue-cue">click / space ▸</span>
+        <div class="vn-progress" id="vnProgress">0 / 0</div>
+      </div>
+    </div>
 
-function parseClientTime(timeStr){
-  const [hh,mm,ss] = timeStr.split(':').map(Number);
-  return new Date(2000, 0, 1, hh, mm, ss);
-}
+    <aside class="player-panel" id="playerPanel">
+      <div class="panel-tabs">
+        <button type="button" class="panel-tab active" data-pane="paneSpeakers">角色</button>
+        <button type="button" class="panel-tab" data-pane="paneLines">劇情</button>
+        <button type="button" class="panel-tab" data-pane="paneSettings">設定</button>
+      </div>
 
-function normalizeChannel(tag){
-  if(!tag) return null;
-  const t = tag.trim();
-  if(t.toLowerCase() === 'chat') return null;
-  return t;
-}
+      <div class="panel-pane active" id="paneSpeakers">
+        <p class="panel-section-title">出場角色</p>
+        <div id="speakerList" style="margin-top:10px;"></div>
+      </div>
 
-function parseLog(text){
-  const lines = text.split(/\r?\n/);
+      <div class="panel-pane" id="paneLines">
+        <p class="panel-section-title">逐行設定</p>
+        <div id="lineList" style="margin-top:10px;"></div>
+      </div>
 
-  let hasChannelFormat = false;
-  for(const rawLine of lines){
-    const line = rawLine.replace(/\r$/, '');
-    if(CLIENT_CHAT_RE_CHANNEL.test(line)){ hasChannelFormat = true; break; }
-    const sm = line.match(SERVER_CHAT_RE);
-    if(sm && normalizeChannel(sm[3]) !== null){ hasChannelFormat = true; break; }
-  }
+      <div class="panel-pane" id="paneSettings">
+        <p class="panel-section-title">場景背景（預設）</p>
+        <div class="settings-field">
+          <label class="mini-file-btn">
+            匯入預設背景
+            <input type="file" accept="image/*" id="defaultBgInput">
+          </label>
+          <div class="play-hint" id="defaultBgFileName">尚未匯入</div>
+          <div class="row" style="margin-top:8px;">
+            <button class="btn btn-ghost" id="defaultBgClearBtn" type="button">清除預設背景</button>
+          </div>
+        </div>
 
-  const result = [];
-  for(const rawLine of lines){
-    const line = rawLine.replace(/\r$/, '');
-    if(!line.trim()) continue;
+        <p class="panel-section-title">背景音樂</p>
+        <div class="settings-field">
+          <label class="mini-file-btn">
+            匯入 BGM
+            <input type="file" accept="audio/*" id="bgmInput">
+          </label>
+          <div class="play-hint" id="bgmFileName">尚未匯入</div>
+          <label style="margin-top:8px;">音量：<span class="settings-value" id="bgmVolumeVal">60%</span></label>
+          <input type="range" id="bgmVolume" min="0" max="1" step="0.05" value="0.6">
+          <div class="row" style="margin-top:8px;">
+            <button class="btn btn-ghost" id="bgmStopBtn" type="button">停止 BGM</button>
+          </div>
+        </div>
 
-    let m = line.match(SERVER_CHAT_RE);
-    if(m){
-      const date = m[1] ? parseLogDate(m[1], m[2]) : parseClientTime(m[2]);
-      const channel = normalizeChannel(m[3]);
-      const player = m[4];
-      const rawId = m[5];
-      const text_ = m[6];
-      result.push({type:'chat', date, player, rawId, text:text_, channel, raw: `<${player}> ${text_}`});
-      continue;
-    }
-    m = line.match(SERVER_ACTION_RE);
-    if(m){
-      const date = m[1] ? parseLogDate(m[1], m[2]) : parseClientTime(m[2]);
-      const channel = normalizeChannel(m[3]);
-      const player = m[4];
-      const rawId = m[5];
-      const actionText = `* ${player} ${m[6]}`;
-      result.push({type:'action', date, player, rawId, text:actionText, raw:actionText, channel});
-      continue;
-    }
-    m = line.match(LEGACY_ACTION_RE);
-    if(m){
-      const date = parseLogDate(m[1], m[2]);
-      result.push({type:'action', date, player:null, text:m[3], raw:m[3], channel:null});
-      continue;
-    }
+        <p class="panel-section-title">播放節奏</p>
+        <div class="settings-field">
+          <label>逐字顯示速度：<span class="settings-value" id="typeSpeedVal">28 ms/字</span></label>
+          <input type="range" id="typeSpeedRange" min="4" max="80" step="2" value="28">
+        </div>
+        <div class="settings-field">
+          <label>自動播放時，整句顯示後的停留時間：<span class="settings-value" id="autoDelayVal">1.2 秒</span></label>
+          <input type="range" id="autoDelayRange" min="200" max="4000" step="100" value="1200">
+        </div>
 
-    m = line.match(CLIENT_CHAT_RE_CHANNEL);
-    if(m){
-      const parts = m[3].split(CHAT_NAME_MSG_SPLIT_RE);
-      if(parts.length >= 2){
-        const date = parseClientTime(m[1]);
-        const channel = normalizeChannel(m[2]);
-        const player = parts[0].trim();
-        const msg = parts.slice(1).join('   ');
-        result.push({type:'chat', date, player, text:msg, channel, raw: `<${player}> ${msg}`});
-        continue;
-      }
-    }
-    m = !hasChannelFormat && line.match(CLIENT_CHAT_RE);
-    if(m){
-      const date = parseClientTime(m[1]);
-      const player = m[2].trim();
-      result.push({type:'chat', date, player, text:m[3], channel:null, raw: `<${player}> ${m[3]}`});
-      continue;
-    }
-    m = line.match(CLIENT_ACTION_RE_CHANNEL);
-    if(m){
-      const date = parseClientTime(m[1]);
-      const channel = normalizeChannel(m[2]);
-      result.push({type:'action', date, player:null, text:m[3], raw:m[3], channel});
-      continue;
-    }
-    m = !hasChannelFormat && line.match(CLIENT_ACTION_RE);
-    if(m){
-      const date = parseClientTime(m[1]);
-      result.push({type:'action', date, player:null, text:m[2], raw:m[2], channel:null});
-      continue;
-    }
-  }
-  attributeActionPlayers(result);
-  return result;
-}
+        <p class="panel-section-title">其他</p>
+        <div class="settings-field">
+          <button class="btn btn-ghost" id="clearOverridesBtn" type="button">清除所有單句指定的圖片／音效</button>
+        </div>
+      </div>
+    </aside>
+  </div>
 
-function attributeActionPlayers(list){
-  const chatPlayers = Array.from(new Set(list.filter(e=>e.type==='chat').map(e=>e.player)));
-  chatPlayers.sort((a,b)=> b.length - a.length);
-  for(const e of list){
-    if(e.type !== 'action') continue;
-    if(e.player) continue;
-    const body = e.text.replace(/^\*\s*/, '');
-    let matched = null;
-    for(const name of chatPlayers){
-      if(!name) continue;
-      if(body === name || body.startsWith(name + ' ') || body.startsWith(name + '\u3000')){
-        matched = name;
-        break;
-      }
-    }
-    e.player = matched;
-  }
-}
+  <div class="player-controlbar">
+    <button class="btn btn-ghost" id="prevLineBtn" type="button">◀ 上一句</button>
+    <button class="btn btn-ghost" id="nextLineBtn" type="button">下一句 ▶</button>
+    <button class="btn btn-ghost" id="autoPlayBtn" type="button">▶ 自動播放</button>
+    <button class="btn btn-ghost" id="restartPlayBtn" type="button">⟲ 從頭開始</button>
+    <button class="btn btn-ghost" id="exportHtmlBtn" type="button">⤓ 匯出成 HTML</button>
+    <div class="spacer"></div>
+    <span class="play-hint">空白鍵/Enter/→ 繼續　←上一句　Esc 離開</span>
+  </div>
 
-let selectedPlayers = new Set();
+  <audio id="bgmAudio"></audio>
+</div>
 
-function refreshPlayerList(){
-  const box = document.getElementById('chipHints');
-  const chatPlayers = entries.filter(e=>e.type==='chat').map(e=>e.player);
-  const counts = {};
-  chatPlayers.forEach(p => counts[p] = (counts[p]||0)+1);
-  const names = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
-
-  selectedPlayers = new Set(Array.from(selectedPlayers).filter(n => counts[n] !== undefined));
-
-  if(names.length === 0){
-    box.innerHTML = '';
-    return;
-  }
-  box.innerHTML = names.map(n =>
-    `<span class="chip" data-name="${escapeHtml(n)}">${escapeHtml(n)} · ${counts[n]}</span>`
-  ).join('');
-  updateChipActiveState();
-
-  box.querySelectorAll('.chip').forEach(chip=>{
-    chip.addEventListener('click', ()=>{
-      document.getElementById('scopeSome').checked = true;
-      const name = chip.getAttribute('data-name');
-      if(selectedPlayers.has(name)){
-        selectedPlayers.delete(name);
-      } else {
-        selectedPlayers.add(name);
-      }
-      updateChipActiveState();
-    });
-  });
-}
-
-function updateChipActiveState(){
-  document.querySelectorAll('#chipHints .chip').forEach(chip=>{
-    const name = chip.getAttribute('data-name');
-    chip.classList.toggle('active', selectedPlayers.has(name));
-  });
-}
-
-let selectedChannels = new Set();
-const NO_CHANNEL_LABEL = '（未分頻道）';
-
-function refreshChannelList(){
-  const box = document.getElementById('channelChips');
-  const chatEntries = entries.filter(e=>e.type==='chat');
-  const counts = {};
-  chatEntries.forEach(e => {
-    const key = e.channel === null ? NO_CHANNEL_LABEL : e.channel;
-    counts[key] = (counts[key]||0)+1;
-  });
-  const names = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
-
-  selectedChannels = new Set(Array.from(selectedChannels).filter(n => counts[n] !== undefined));
-
-  if(names.length === 0){
-    box.innerHTML = '';
-    return;
-  }
-  box.innerHTML = names.map(n =>
-    `<span class="chip" data-name="${escapeHtml(n)}">${escapeHtml(n)} · ${counts[n]}</span>`
-  ).join('');
-  updateChannelChipActiveState();
-
-  box.querySelectorAll('.chip').forEach(chip=>{
-    chip.addEventListener('click', ()=>{
-      document.getElementById('channelSome').checked = true;
-      const name = chip.getAttribute('data-name');
-      if(selectedChannels.has(name)){
-        selectedChannels.delete(name);
-      } else {
-        selectedChannels.add(name);
-      }
-      updateChannelChipActiveState();
-    });
-  });
-}
-
-function updateChannelChipActiveState(){
-  document.querySelectorAll('#channelChips .chip').forEach(chip=>{
-    const name = chip.getAttribute('data-name');
-    chip.classList.toggle('active', selectedChannels.has(name));
-  });
-}
-
-function escapeHtml(s){
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function handleText(text){
-  entries = parseLog(text);
-  refreshPlayerList();
-  refreshChannelList();
-}
-
-document.getElementById('rawInput').addEventListener('input', (e)=>{
-  handleText(e.target.value);
-});
-
-function decodeLogBuffer(buffer){
-  let text = new TextDecoder('utf-8', {fatal:false}).decode(buffer);
-  const badCount = (text.match(/\uFFFD/g) || []).length;
-  if(badCount > 0){
-    try{
-      text = new TextDecoder('big5').decode(buffer);
-    }catch(e){}
-  }
-  return text;
-}
-
-function looksLikeGzip(buffer, filename){
-  if(/\.gz$/i.test(filename)) return true;
-  const bytes = new Uint8Array(buffer.slice(0, 2));
-  return bytes.length === 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
-}
-
-async function decompressGzip(buffer){
-  if(typeof DecompressionStream === 'undefined'){
-    throw new Error('這個瀏覽器不支援自動解壓縮 .gz，請先手動解壓縮成 .log / .txt 後再匯入');
-  }
-  const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return await new Response(stream).arrayBuffer();
-}
-
-async function loadFile(file){
-  const fileNameEl = document.getElementById('fileName');
-  fileNameEl.textContent = `${file.name}（讀取中…）`;
-  try{
-    let buffer = await file.arrayBuffer();
-    if(looksLikeGzip(buffer, file.name)){
-      fileNameEl.textContent = `${file.name}（解壓縮中…）`;
-      buffer = await decompressGzip(buffer);
-    }
-    const text = decodeLogBuffer(buffer);
-    document.getElementById('rawInput').value = text;
-    handleText(text);
-    fileNameEl.textContent = file.name;
-  }catch(err){
-    fileNameEl.textContent = `讀取失敗：${err && err.message ? err.message : err}`;
-  }
-}
-
-document.getElementById('fileInput').addEventListener('change', (e)=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  loadFile(file);
-});
-
-const dropZone = document.getElementById('dropZone');
-['dragenter','dragover'].forEach(evt=>{
-  dropZone.addEventListener(evt, (e)=>{
-    e.preventDefault();
-    e.stopPropagation();
-    dropZone.classList.add('dragover');
-  });
-});
-['dragleave','dragend'].forEach(evt=>{
-  dropZone.addEventListener(evt, (e)=>{
-    e.preventDefault();
-    e.stopPropagation();
-    dropZone.classList.remove('dragover');
-  });
-});
-dropZone.addEventListener('drop', (e)=>{
-  e.preventDefault();
-  e.stopPropagation();
-  dropZone.classList.remove('dragover');
-  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-  if(!file) return;
-  document.getElementById('fileInput').value = '';
-  loadFile(file);
-});
-
-document.getElementById('clearBtn').addEventListener('click', ()=>{
-  document.getElementById('rawInput').value = '';
-  document.getElementById('fileInput').value = '';
-  document.getElementById('fileName').textContent = '尚未選擇檔案';
-  entries = [];
-  refreshPlayerList();
-  refreshChannelList();
-});
-
-document.querySelectorAll('input[name="scopeMode"]').forEach(radio=>{
-  radio.addEventListener('change', ()=>{
-    document.getElementById('chipHints').style.opacity =
-      document.getElementById('scopeAll').checked ? '0.45' : '1';
-  });
-});
-
-document.querySelectorAll('input[name="channelMode"]').forEach(radio=>{
-  radio.addEventListener('change', ()=>{
-    document.getElementById('channelChips').style.opacity =
-      document.getElementById('channelAll').checked ? '0.45' : '1';
-  });
-});
-
-function entrySecondsOfDay(entry){
-  const d = entry.date;
-  return d.getHours()*3600 + d.getMinutes()*60 + d.getSeconds();
-}
-
-function readTimeField(prefix, second){
-  const hour = parseInt(document.getElementById(prefix+'Hour').value, 10);
-  const minute = parseInt(document.getElementById(prefix+'Minute').value, 10);
-  if([hour, minute].some(v => isNaN(v))) return null;
-  return hour*3600 + minute*60 + second;
-}
-
-function runFilter(){
-  const startSec = readTimeField('start', 0);
-  const endSec = readTimeField('end', 59);
-
-  const scopeAll = document.getElementById('scopeAll').checked;
-  const selectedLower = scopeAll ? [] : Array.from(selectedPlayers).map(p=>p.toLowerCase());
-  const includeActions = document.getElementById('includeActions').checked;
-  const applyScopeToActions = document.getElementById('applyScopeToActions').checked;
-
-  const channelAll = document.getElementById('channelAll').checked;
-  const selectedChans = channelAll ? [] : Array.from(selectedChannels);
-
-  const out = [];
-  for(const e of entries){
-    if(!e.date) continue;
-    const sec = entrySecondsOfDay(e);
-    if(startSec !== null && endSec !== null){
-      const inRange = (startSec <= endSec)
-        ? (sec >= startSec && sec <= endSec)
-        : (sec >= startSec || sec <= endSec);
-      if(!inRange) continue;
-    } else if(startSec !== null){
-      if(sec < startSec) continue;
-    } else if(endSec !== null){
-      if(sec > endSec) continue;
-    }
-
-    if(e.type === 'chat'){
-      if(selectedLower.length > 0 && !selectedLower.includes(e.player.toLowerCase())) continue;
-      if(selectedChans.length > 0){
-        const key = e.channel === null ? NO_CHANNEL_LABEL : e.channel;
-        if(!selectedChans.includes(key)) continue;
-      }
-      out.push(e);
-    } else if(e.type === 'action'){
-      if(!includeActions) continue;
-      if(applyScopeToActions && selectedLower.length > 0){
-        if(!e.player || !selectedLower.includes(e.player.toLowerCase())) continue;
-      }
-      if(selectedChans.length > 0 && e.channel !== null){
-        const key = e.channel === null ? NO_CHANNEL_LABEL : e.channel;
-        if(!selectedChans.includes(key)) continue;
-      }
-      out.push(e);
-    }
-  }
-
-  if(document.getElementById('hideDuplicates').checked){
-    return dedupeEntries(out, 5*60*1000);
-  }
-  return out;
-}
-
-function dedupeEntries(list, thresholdMs){
-  const lastSeen = new Map();
-  const output = [];
-  for(const e of list){
-    const key = `${e.type}|${e.channel || ''}|${e.player || ''}|${e.text}`;
-    const prev = lastSeen.get(key);
-    if(prev && (e.date - prev.date) <= thresholdMs){
-      prev.date = e.date;
-      prev.entry.count += 1;
-      continue;
-    }
-    const entryCopy = Object.assign({}, e, {count: 1});
-    lastSeen.set(key, {date: e.date, entry: entryCopy});
-    output.push(entryCopy);
-  }
-  return output;
-}
-
-function repeatSuffix(e){
-  return (e.count && e.count > 1) ? ` (x${e.count})` : '';
-}
-
-function renderOutput(list){
-  const outDiv = document.getElementById('output');
-  if(list.length === 0){
-    outDiv.innerHTML = '<span class="placeholder">篩選後沒有符合的紀錄</span>';
-    return;
-  }
-  const html = list.map(e=>{
-    if(e.type === 'chat'){
-      return `<span class="chat-name">&lt;${escapeHtml(e.player)}&gt;</span> ${escapeHtml(e.text)}${escapeHtml(repeatSuffix(e))}`;
-    } else {
-      return `<span class="action-line">${escapeHtml(e.text)}${escapeHtml(repeatSuffix(e))}</span>`;
-    }
-  }).join('\n');
-  outDiv.innerHTML = html;
-}
-
-function getPlainOutput(list){
-  return list.map(e => e.type === 'chat' ? `<${e.player}> ${e.text}${repeatSuffix(e)}` : `${e.text}${repeatSuffix(e)}`).join('\n');
-}
-
-let lastFiltered = [];
-
-document.getElementById('runBtn').addEventListener('click', ()=>{
-  if(entries.length === 0 && document.getElementById('rawInput').value.trim()){
-    handleText(document.getElementById('rawInput').value);
-  }
-  lastFiltered = runFilter();
-  renderOutput(lastFiltered);
-});
-
-document.getElementById('copyBtn').addEventListener('click', async ()=>{
-  const text = getPlainOutput(lastFiltered);
-  if(!text){ return; }
-  try{
-    await navigator.clipboard.writeText(text);
-    const btn = document.getElementById('copyBtn');
-    const old = btn.textContent;
-    btn.textContent = '已複製';
-    setTimeout(()=>btn.textContent = old, 1500);
-  }catch(err){
-    alert('複製失敗');
-  }
-});
-
-document.getElementById('downloadBtn').addEventListener('click', ()=>{
-  const text = getPlainOutput(lastFiltered);
-  if(!text){ return; }
-  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'rp_chat_clean.txt';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-});
-</script>
+<script src="js/extractor.js"></script>
+<script src="js/player.js"></script>
 </body>
 </html>
