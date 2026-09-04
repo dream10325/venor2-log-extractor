@@ -1,5 +1,11 @@
 const StageModule = (function () {
 
+  const stageSlots = {
+    left: null,
+    center: null,
+    right: null
+  };
+
   function capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
@@ -30,10 +36,10 @@ const StageModule = (function () {
     return line.type === 'action' ? actionDisplayText(line, speakers) : line.text;
   }
 
-  function resolvePortraitURL(sp, ov) {
+  function resolvePortraitURL(sp, portraitIdx) {
     if (!sp || !sp.portraits || sp.portraits.length === 0) return null;
-    if (ov && ov.portraitIdx !== undefined && ov.portraitIdx !== null && sp.portraits[ov.portraitIdx]) {
-      return sp.portraits[ov.portraitIdx].url;
+    if (portraitIdx !== undefined && portraitIdx !== null && sp.portraits[portraitIdx]) {
+      return sp.portraits[portraitIdx].url;
     }
     const defIdx = sp.defaultPortraitIdx || 0;
     return sp.portraits[defIdx] ? sp.portraits[defIdx].url : sp.portraits[0].url;
@@ -43,10 +49,12 @@ const StageModule = (function () {
     return (ov && ov.bgURL) || defaultBgURL || null;
   }
 
-  function applySpeakerTransform(el, sp) {
+  function applySpeakerTransform(el, imgEl, sp, flip) {
     const scale = sp.scale || 1;
     const offX = sp.offsetX || 0;
     const offY = sp.offsetY || 0;
+    const scaleX = flip ? -1 : 1;
+
     if (sp.position === 'center') {
       el.style.left = `calc(50% + ${offX}px)`;
       el.style.right = 'auto';
@@ -60,6 +68,8 @@ const StageModule = (function () {
       el.style.right = `calc(2% - ${offX}px)`;
       el.style.transform = `translateY(${offY}px) scale(${scale})`;
     }
+
+    imgEl.style.transform = `scaleX(${scaleX})`;
   }
 
   function applyTextStyle(textStyle) {
@@ -76,17 +86,15 @@ const StageModule = (function () {
     root.style.setProperty('--vn-box-bg', `rgba(${r}, ${g}, ${b}, ${textStyle.boxOpacity})`);
   }
 
-  function renderStage(line, ov, sp, defaultBgURL) {
+  function resetStageSlots() {
+    stageSlots.left = null;
+    stageSlots.center = null;
+    stageSlots.right = null;
+  }
+
+  function renderStage(line, ov, sp, defaultBgURL, speakers) {
     const vnBox = document.getElementById('vnBox');
     const stageBg = document.getElementById('stageBg');
-
-    ['Left', 'Center', 'Right'].forEach(pos => {
-      const slot = document.getElementById('portrait' + pos);
-      slot.classList.remove('active');
-      slot.style.left = '';
-      slot.style.right = '';
-      slot.style.transform = '';
-    });
 
     const bgURL = resolveBackgroundURL(ov, defaultBgURL);
     if (bgURL) {
@@ -107,31 +115,61 @@ const StageModule = (function () {
       illustImg.removeAttribute('src');
     }
 
+    let activeSpeakerName = null;
+    let targetSpeaker = sp;
+
     if (line.type === 'chat') {
       vnBox.classList.remove('narration');
       document.getElementById('vnName').textContent = sp.displayName;
       vnBox.style.setProperty('--vn-name-color', sp.color);
-
-      const imgURL = resolvePortraitURL(sp, ov);
-      const posKey = capitalize(sp.position);
-      const slot = document.getElementById('portrait' + posKey);
-      if (imgURL) {
-        document.getElementById('portrait' + posKey + 'Img').src = imgURL;
-        applySpeakerTransform(slot, sp);
-        slot.classList.add('active');
-      }
+      activeSpeakerName = sp.name;
     } else {
       vnBox.classList.add('narration');
       document.getElementById('vnName').textContent = '';
-      const imgURL = resolvePortraitURL(sp, ov);
-      if (sp && imgURL) {
-        const posKey = capitalize(sp.position);
-        const slot = document.getElementById('portrait' + posKey);
-        document.getElementById('portrait' + posKey + 'Img').src = imgURL;
-        applySpeakerTransform(slot, sp);
-        slot.classList.add('active');
+      if (ov.speaker && speakers && speakers[ov.speaker]) {
+        targetSpeaker = speakers[ov.speaker];
+      }
+      activeSpeakerName = targetSpeaker ? targetSpeaker.name : null;
+    }
+
+    if (targetSpeaker) {
+      const pos = targetSpeaker.position || 'center';
+      const imgURL = resolvePortraitURL(targetSpeaker, ov.portraitIdx);
+      if (imgURL) {
+        const isFlip = (ov.flip !== undefined && ov.flip !== null) ? !!ov.flip : (targetSpeaker.portraits && targetSpeaker.portraits[ov.portraitIdx || targetSpeaker.defaultPortraitIdx || 0] && !!targetSpeaker.portraits[ov.portraitIdx || targetSpeaker.defaultPortraitIdx || 0].flip);
+        stageSlots[pos] = {
+          speaker: targetSpeaker,
+          imgURL: imgURL,
+          flip: isFlip
+        };
       }
     }
+
+    ['left', 'center', 'right'].forEach(pos => {
+      const posKey = capitalize(pos);
+      const slot = document.getElementById('portrait' + posKey);
+      const imgEl = document.getElementById('portrait' + posKey + 'Img');
+      const data = stageSlots[pos];
+
+      if (data && data.imgURL) {
+        imgEl.src = data.imgURL;
+        applySpeakerTransform(slot, imgEl, data.speaker, data.flip);
+        slot.classList.add('active');
+        if (activeSpeakerName && data.speaker.name === activeSpeakerName) {
+          slot.classList.remove('dimmed');
+        } else {
+          slot.classList.add('dimmed');
+        }
+      } else {
+        slot.classList.remove('active');
+        slot.classList.remove('dimmed');
+        slot.style.left = '';
+        slot.style.right = '';
+        slot.style.transform = '';
+        imgEl.style.transform = '';
+        imgEl.removeAttribute('src');
+      }
+    });
   }
 
   return {
@@ -143,6 +181,7 @@ const StageModule = (function () {
     resolveBackgroundURL,
     applySpeakerTransform,
     applyTextStyle,
+    resetStageSlots,
     renderStage
   };
 })();

@@ -267,12 +267,18 @@ const EditorModule = (function () {
       const sp = state.speakers[name];
       const renamed = sp.displayName !== name;
       const portraitCards = (sp.portraits || []).map((p, idx) => `
-        <div class="portrait-thumbnail ${idx === (sp.defaultPortraitIdx || 0) ? 'active' : ''}" 
-             style="background-image:url('${p.url}')" 
-             title="${escapeHtml(p.name)}（點擊設為預設）" 
-             data-role="set-default-port" 
-             data-name="${escapeHtml(name)}" 
-             data-idx="${idx}"></div>
+        <div class="portrait-thumbnail-wrap">
+          <div class="portrait-thumbnail ${idx === (sp.defaultPortraitIdx || 0) ? 'active' : ''}" 
+               style="background-image:url('${p.url}')" 
+               title="${escapeHtml(p.name)}（點擊設為預設）" 
+               data-role="set-default-port" 
+               data-name="${escapeHtml(name)}" 
+               data-idx="${idx}"></div>
+          <button type="button" class="portrait-thumb-flip-btn ${p.flip ? 'active' : ''}" 
+                  data-role="toggle-portrait-flip" 
+                  data-name="${escapeHtml(name)}" 
+                  data-idx="${idx}">翻轉</button>
+        </div>
       `).join('');
 
       return `
@@ -342,7 +348,7 @@ const EditorModule = (function () {
         const sp = state.speakers[name];
         files.forEach(f => {
           const url = URL.createObjectURL(f);
-          sp.portraits.push({ name: f.name, file: f, url });
+          sp.portraits.push({ name: f.name, file: f, url, flip: false });
         });
         renderSpeakerPanel(state, callbacks);
         callbacks.onUpdateLines();
@@ -357,6 +363,20 @@ const EditorModule = (function () {
         state.speakers[name].defaultPortraitIdx = idx;
         renderSpeakerPanel(state, callbacks);
         callbacks.onRedraw();
+      });
+    });
+
+    box.querySelectorAll('[data-role=toggle-portrait-flip]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const name = btn.getAttribute('data-name');
+        const idx = parseInt(btn.getAttribute('data-idx'), 10);
+        const p = state.speakers[name].portraits[idx];
+        if (p) {
+          p.flip = !p.flip;
+          renderSpeakerPanel(state, callbacks);
+          callbacks.onRedraw();
+        }
       });
     });
 
@@ -421,27 +441,50 @@ const EditorModule = (function () {
     if (cur) cur.scrollIntoView({ block: 'nearest' });
   }
 
+  let dragSrcIndex = null;
+
   function renderLinePanel(state, callbacks) {
     const box = document.getElementById('lineList');
     if (state.script.length === 0) { box.innerHTML = ''; return; }
 
+    const allSpeakerNames = Object.keys(state.speakers);
+
     box.innerHTML = state.script.map((line, i) => {
       const ov = state.lineOverrides[line.key] || {};
       const speakerLabel = speakerLabelFor(line, state.speakers);
-      const sp = line.player ? state.speakers[line.player] : null;
+
+      const isNarration = line.type !== 'chat';
+      let effectiveSpeakerName = line.player;
+      if (isNarration) {
+        effectiveSpeakerName = ov.speaker !== undefined ? ov.speaker : (line.player || '');
+      }
+      const sp = effectiveSpeakerName ? state.speakers[effectiveSpeakerName] : null;
 
       const tags = [];
       if (ov.portraitIdx !== undefined && ov.portraitIdx !== null) tags.push('<span class="line-override-tag">[立繪]</span>');
+      if (ov.flip !== undefined) tags.push('<span class="line-override-tag">[翻轉]</span>');
       if (ov.bgURL) tags.push('<span class="line-override-tag">[換背景]</span>');
       if (ov.bgmAction === 'set') tags.push('<span class="line-override-tag">[換BGM]</span>');
       if (ov.bgmAction === 'stop') tags.push('<span class="line-override-tag">[停BGM]</span>');
       if (ov.illustURL) tags.push('<span class="line-override-tag">[插圖]</span>');
       if (ov.sfxURL) tags.push('<span class="line-override-tag">[音效]</span>');
 
+      let narrationSpeakerSelectHtml = '';
+      if (isNarration) {
+        narrationSpeakerSelectHtml = `
+          <select class="pos-select" style="max-width:110px;" data-role="line-speaker-select" data-index="${i}">
+            <option value="">（不指定立繪）</option>
+            ${allSpeakerNames.map(name => `
+              <option value="${escapeHtml(name)}" ${effectiveSpeakerName === name ? 'selected' : ''}>${escapeHtml(state.speakers[name].displayName)}</option>
+            `).join('')}
+          </select>
+        `;
+      }
+
       let portraitSelectHtml = '';
       if (sp && sp.portraits && sp.portraits.length > 0) {
         portraitSelectHtml = `
-          <select class="pos-select" style="max-width:130px;" data-role="line-portrait-select" data-index="${i}">
+          <select class="pos-select" style="max-width:110px;" data-role="line-portrait-select" data-index="${i}">
             <option value="">預設立繪</option>
             ${sp.portraits.map((p, pIdx) => `
               <option value="${pIdx}" ${ov.portraitIdx === pIdx ? 'selected' : ''}>${escapeHtml(p.name)}</option>
@@ -450,12 +493,22 @@ const EditorModule = (function () {
         `;
       }
 
+      let isFlipActive = false;
+      if (ov.flip !== undefined) {
+        isFlipActive = !!ov.flip;
+      } else if (sp && sp.portraits && sp.portraits.length > 0) {
+        const pIdx = (ov.portraitIdx !== undefined && ov.portraitIdx !== null) ? ov.portraitIdx : (sp.defaultPortraitIdx || 0);
+        isFlipActive = sp.portraits[pIdx] ? !!sp.portraits[pIdx].flip : false;
+      }
+
       return `
-      <div class="line-row" data-index="${i}">
+      <div class="line-row" draggable="true" data-index="${i}">
         <div class="line-row-head">
+          <span class="line-drag-handle" title="拖曳排序">☰</span>
           <span class="line-idx">#${i + 1}</span>
           <span class="line-tag ${line.type}">${line.type === 'chat' ? '對話' : '動作'}</span>
           <span class="line-speaker">${escapeHtml(speakerLabel)}</span>
+          <button type="button" class="line-del-btn" data-role="line-del" data-index="${i}" title="刪除本句">✕</button>
         </div>
         <div class="line-fmt-bar" data-index="${i}">
           <button type="button" class="fmt-btn" data-fmt="b" title="粗體"><b>B</b></button>
@@ -477,7 +530,9 @@ const EditorModule = (function () {
         </div>
         <textarea class="line-text-edit" data-role="line-text" data-index="${i}" rows="2">${escapeHtml(line.text)}</textarea>
         <div class="line-row-actions">
+          ${narrationSpeakerSelectHtml}
           ${portraitSelectHtml}
+          <button type="button" class="mini-file-btn ${isFlipActive ? 'active' : ''}" data-role="line-flip-btn" data-index="${i}">翻轉</button>
           <label class="mini-file-btn" onclick="event.stopPropagation()">
             畫面插圖
             <input type="file" accept="image/*" data-role="line-illust" data-index="${i}">
@@ -495,11 +550,57 @@ const EditorModule = (function () {
             單句音效
             <input type="file" accept="audio/*" data-role="line-sfx" data-index="${i}">
           </label>
+          <input type="range" class="line-sfx-vol" min="0" max="1" step="0.05" value="${ov.sfxVolume !== undefined ? ov.sfxVolume : 0.9}" data-role="line-sfx-vol" data-index="${i}" title="音效音量" style="width:50px;">
+          <button type="button" class="mini-file-btn" data-role="line-insert-above" data-index="${i}">上方插入</button>
+          <button type="button" class="mini-file-btn" data-role="line-insert-below" data-index="${i}">下方插入</button>
           ${tags.length ? `<button type="button" class="mini-file-btn" data-role="line-clear" data-index="${i}">清除指定</button>` : ''}
           ${tags.join('')}
         </div>
       </div>`;
     }).join('');
+
+    box.querySelectorAll('.line-row').forEach(row => {
+      row.addEventListener('dragstart', e => {
+        dragSrcIndex = parseInt(row.getAttribute('data-index'), 10);
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          row.classList.add('drag-over-top');
+          row.classList.remove('drag-over-bottom');
+        } else {
+          row.classList.add('drag-over-bottom');
+          row.classList.remove('drag-over-top');
+        }
+      });
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('drag-over-top');
+        row.classList.remove('drag-over-bottom');
+      });
+      row.addEventListener('drop', e => {
+        e.preventDefault();
+        row.classList.remove('drag-over-top');
+        row.classList.remove('drag-over-bottom');
+        const targetIndex = parseInt(row.getAttribute('data-index'), 10);
+        if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const insertAfter = e.clientY >= midY;
+        callbacks.onReorder(dragSrcIndex, targetIndex, insertAfter);
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        document.querySelectorAll('.line-row').forEach(r => {
+          r.classList.remove('drag-over-top');
+          r.classList.remove('drag-over-bottom');
+        });
+      });
+    });
 
     box.querySelectorAll('.line-fmt-bar').forEach(bar => {
       const idx = parseInt(bar.getAttribute('data-index'), 10);
@@ -618,6 +719,20 @@ const EditorModule = (function () {
       });
     });
 
+    box.querySelectorAll('select[data-role=line-speaker-select]').forEach(sel => {
+      sel.addEventListener('click', e => e.stopPropagation());
+      sel.addEventListener('change', () => {
+        const idx = parseInt(sel.getAttribute('data-index'), 10);
+        const key = state.script[idx].key;
+        state.lineOverrides[key] = Object.assign({}, state.lineOverrides[key], {
+          speaker: sel.value || null,
+          portraitIdx: null
+        });
+        renderLinePanel(state, callbacks);
+        if (idx === state.index) callbacks.onRedraw();
+      });
+    });
+
     box.querySelectorAll('select[data-role=line-portrait-select]').forEach(sel => {
       sel.addEventListener('click', e => e.stopPropagation());
       sel.addEventListener('change', () => {
@@ -625,6 +740,28 @@ const EditorModule = (function () {
         const key = state.script[idx].key;
         const val = sel.value === '' ? null : parseInt(sel.value, 10);
         state.lineOverrides[key] = Object.assign({}, state.lineOverrides[key], { portraitIdx: val });
+        renderLinePanel(state, callbacks);
+        if (idx === state.index) callbacks.onRedraw();
+      });
+    });
+
+    box.querySelectorAll('[data-role=line-flip-btn]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-index'), 10);
+        const key = state.script[idx].key;
+        const currentOv = state.lineOverrides[key] || {};
+        let nextFlip = true;
+        if (currentOv.flip !== undefined) {
+          nextFlip = !currentOv.flip;
+        } else {
+          const spName = currentOv.speaker || state.script[idx].player;
+          const sp = spName ? state.speakers[spName] : null;
+          const pIdx = currentOv.portraitIdx !== undefined && currentOv.portraitIdx !== null ? currentOv.portraitIdx : (sp ? sp.defaultPortraitIdx || 0 : 0);
+          const baseFlip = sp && sp.portraits && sp.portraits[pIdx] ? !!sp.portraits[pIdx].flip : false;
+          nextFlip = !baseFlip;
+        }
+        state.lineOverrides[key] = Object.assign({}, currentOv, { flip: nextFlip });
         renderLinePanel(state, callbacks);
         if (idx === state.index) callbacks.onRedraw();
       });
@@ -693,6 +830,39 @@ const EditorModule = (function () {
         const url = URL.createObjectURL(file);
         state.lineOverrides[key] = Object.assign({}, state.lineOverrides[key], { sfxURL: url, sfxFile: file, sfxName: file.name });
         renderLinePanel(state, callbacks);
+      });
+    });
+
+    box.querySelectorAll('input[data-role=line-sfx-vol]').forEach(inp => {
+      inp.addEventListener('click', e => e.stopPropagation());
+      inp.addEventListener('input', () => {
+        const idx = parseInt(inp.getAttribute('data-index'), 10);
+        const key = state.script[idx].key;
+        state.lineOverrides[key] = Object.assign({}, state.lineOverrides[key], { sfxVolume: parseFloat(inp.value) });
+      });
+    });
+
+    box.querySelectorAll('[data-role=line-del]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-index'), 10);
+        callbacks.onDeleteLine(idx);
+      });
+    });
+
+    box.querySelectorAll('[data-role=line-insert-above]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-index'), 10);
+        callbacks.onInsertLine(idx, false);
+      });
+    });
+
+    box.querySelectorAll('[data-role=line-insert-below]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-index'), 10);
+        callbacks.onInsertLine(idx, true);
       });
     });
 

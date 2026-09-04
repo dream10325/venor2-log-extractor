@@ -113,11 +113,11 @@
     $('vnProgress').textContent = `${idx + 1} / ${state.script.length}`;
     EditorModule.highlightCurrentLineRow(idx);
 
-    StageModule.renderStage(line, ov, sp, state.defaultBgURL);
+    StageModule.renderStage(line, ov, sp, state.defaultBgURL, state.speakers);
     AudioModule.updateBgmForLine(idx, state);
 
     if (!opts.redrawOnly && ov.sfxURL) {
-      AudioModule.playSfx(ov.sfxURL, 0.9);
+      AudioModule.playSfx(ov.sfxURL, ov.sfxVolume);
     }
 
     if (opts.redrawOnly) return;
@@ -196,7 +196,46 @@
         const full = StageModule.displayTextFor(state.script[state.index], state.speakers) + StageModule.repeatSuffixSafe(state.script[state.index]);
         $('vnText').innerHTML = BBCodeModule.tokensToHtml(BBCodeModule.parseFormattedTokens(full));
       },
-      onBgmChange: (idx) => AudioModule.updateBgmForLine(idx, state)
+      onBgmChange: (idx) => AudioModule.updateBgmForLine(idx, state),
+      onDeleteLine: (idx) => {
+        if (state.script.length <= 1) {
+          alert('至少需保留一句對話');
+          return;
+        }
+        if (!confirm(`確定要刪除第 ${idx + 1} 句嗎？`)) return;
+        state.script.splice(idx, 1);
+        if (state.index >= state.script.length) state.index = state.script.length - 1;
+        EditorModule.renderLinePanel(state, editorCallbacks());
+        showLine(state.index, { resetTyping: true });
+      },
+      onInsertLine: (idx, isBelow) => {
+        const insertIdx = isBelow ? idx + 1 : idx;
+        const newLine = {
+          type: 'action',
+          player: null,
+          text: '（請在此輸入對話或動作）',
+          count: 1,
+          key: 'custom_' + Date.now() + '_' + Math.random()
+        };
+        state.script.splice(insertIdx, 0, newLine);
+        if (isBelow && state.index >= insertIdx) state.index++;
+        EditorModule.renderLinePanel(state, editorCallbacks());
+        showLine(insertIdx, { resetTyping: true });
+      },
+      onReorder: (fromIdx, toIdx, insertAfter) => {
+        const item = state.script.splice(fromIdx, 1)[0];
+        let targetPos = toIdx;
+        if (fromIdx < toIdx) {
+          targetPos = insertAfter ? toIdx : toIdx - 1;
+        } else {
+          targetPos = insertAfter ? toIdx + 1 : toIdx;
+        }
+        targetPos = Math.max(0, Math.min(state.script.length, targetPos));
+        state.script.splice(targetPos, 0, item);
+        state.index = targetPos;
+        EditorModule.renderLinePanel(state, editorCallbacks());
+        showLine(state.index, { resetTyping: true });
+      }
     };
   }
 
@@ -205,6 +244,10 @@
     $('bgmFileName').textContent = state.defaultBgmName || (state.defaultBgmURL ? '（已匯入BGM）' : '尚未匯入');
     $('bgmVolume').value = state.bgmVolume;
     $('bgmVolumeVal').textContent = Math.round(state.bgmVolume * 100) + '%';
+    if ($('sfxGlobalVolume')) {
+      $('sfxGlobalVolume').value = AudioModule.getGlobalSfxVolume();
+      $('sfxGlobalVolumeVal').textContent = Math.round(AudioModule.getGlobalSfxVolume() * 100) + '%';
+    }
     $('typeSpeedRange').value = state.typeSpeed;
     $('typeSpeedVal').textContent = state.typeSpeed + ' ms/字';
     $('autoDelayRange').value = state.autoDelay;
@@ -225,6 +268,7 @@
   function openPlayerUI() {
     state.index = 0;
     state.currentBgmKey = null;
+    StageModule.resetStageSlots();
     EditorModule.clearHistory();
     StageModule.applyTextStyle(state.textStyle);
     EditorModule.renderSpeakerPanel(state, editorCallbacks());
@@ -246,8 +290,10 @@
   }
 
   function closePlayer() {
+    if (!confirm('即將離開播放器，所有未匯出的編輯進度將會遺失。確定要返回嗎？')) return;
     setAutoPlay(false);
     clearTyping();
+    StageModule.resetStageSlots();
     AudioModule.stopBgm(state);
     $('playerView').hidden = true;
     document.body.style.overflow = '';
@@ -294,6 +340,13 @@
     }
   }
 
+  window.addEventListener('beforeunload', e => {
+    if (!$('playerView').hidden && state.script.length > 0) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
   $('playBtn').addEventListener('click', openPlayer);
   $('importPlayInput').addEventListener('change', e => {
     const file = e.target.files[0];
@@ -308,7 +361,11 @@
   $('prevLineBtn').addEventListener('click', () => { setAutoPlay(false); prevLine(); });
   $('nextLineBtn').addEventListener('click', () => { setAutoPlay(false); handleAdvance(); });
   $('autoPlayBtn').addEventListener('click', () => { setAutoPlay(!state.autoPlay); });
-  $('restartPlayBtn').addEventListener('click', () => { setAutoPlay(false); showLine(0, { resetTyping: true }); });
+  $('restartPlayBtn').addEventListener('click', () => {
+    setAutoPlay(false);
+    StageModule.resetStageSlots();
+    showLine(0, { resetTyping: true });
+  });
   $('exportHtmlBtn').addEventListener('click', exportStandaloneHtml);
 
   $('togglePanelBtn').addEventListener('click', () => {
@@ -389,6 +446,14 @@
   $('bgmStopBtn').addEventListener('click', () => {
     AudioModule.stopBgm(state);
   });
+
+  if ($('sfxGlobalVolume')) {
+    $('sfxGlobalVolume').addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      AudioModule.setGlobalSfxVolume(v);
+      $('sfxGlobalVolumeVal').textContent = Math.round(v * 100) + '%';
+    });
+  }
 
   $('typeSpeedRange').addEventListener('input', e => {
     state.typeSpeed = parseInt(e.target.value, 10);

@@ -70,8 +70,7 @@
   justify-content:center;
   pointer-events:none;
   opacity:0;
-  transition:opacity .18s ease, transform .18s ease, filter .18s ease;
-  filter:brightness(.55) saturate(.7);
+  transition:opacity .2s ease, filter .2s ease;
   transform-origin: bottom center;
 }
 .portrait-slot img{
@@ -79,10 +78,14 @@
   max-height:100%;
   object-fit:contain;
   filter:drop-shadow(0 10px 24px rgba(0,0,0,.55));
+  transition:transform .2s ease;
 }
 .portrait-slot.active{
   opacity:1;
   filter:brightness(1) saturate(1);
+}
+.portrait-slot.active.dimmed{
+  filter:brightness(.45) saturate(.6);
 }
 
 .stage-illust{
@@ -180,8 +183,8 @@
 @keyframes vnBlink{ 0%,100%{opacity:.25;} 50%{opacity:1;} }
 
 .player-panel{
-  flex:0 0 360px;
-  max-width:360px;
+  flex:0 0 380px;
+  max-width:380px;
   background:#161618;
   border-left:1px solid #2a2a2e;
   display:flex;
@@ -288,6 +291,12 @@
   overflow-x:auto;
   padding-bottom:4px;
 }
+.portrait-thumbnail-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:3px;
+}
 .portrait-thumbnail{
   width:44px;
   height:44px;
@@ -302,6 +311,20 @@
 .portrait-thumbnail.active{
   border-color:var(--accent);
   box-shadow:0 0 0 2px var(--accent);
+}
+.portrait-thumb-flip-btn{
+  font-size:9.5px;
+  padding:1px 3px;
+  border-radius:3px;
+  border:1px solid #34343c;
+  background:#141416;
+  color:#a0a0aa;
+  cursor:pointer;
+}
+.portrait-thumb-flip-btn.active{
+  border-color:var(--accent);
+  color:#fff;
+  background:var(--accent);
 }
 .speaker-card-controls{
   display:flex;
@@ -347,14 +370,24 @@
   margin-bottom:7px;
   background:#1a1a1e;
   cursor:pointer;
+  user-select:none;
 }
 .line-row:hover{ border-color:#4a4a56; }
 .line-row.current{ border-color:var(--accent); background:#241419; }
+.line-row.dragging{ opacity: 0.4; }
+.line-row.drag-over-top{ border-top: 2px solid var(--accent); }
+.line-row.drag-over-bottom{ border-bottom: 2px solid var(--accent); }
 .line-row-head{
   display:flex;
   align-items:center;
   gap:6px;
   margin-bottom:4px;
+}
+.line-drag-handle{
+  cursor:grab;
+  color:#6f6f78;
+  font-size:12px;
+  padding:0 2px;
 }
 .line-idx{
   font-family:var(--mono);
@@ -375,6 +408,15 @@
   font-weight:700;
   margin-left:auto;
 }
+.line-del-btn{
+  background:transparent;
+  border:none;
+  color:#6f6f78;
+  font-size:12px;
+  cursor:pointer;
+  padding:0 4px;
+}
+.line-del-btn:hover{ color:var(--danger); }
 
 .line-fmt-bar{
   display:flex;

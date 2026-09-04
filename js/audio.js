@@ -1,5 +1,7 @@
 const AudioModule = (function () {
 
+  let globalSfxVolume = 0.9;
+
   function getEffectiveBgm(idx, script, lineOverrides, defaultBgmURL, defaultBgmName) {
     for (let i = idx; i >= 0; i--) {
       const l = script[i];
@@ -32,10 +34,19 @@ const AudioModule = (function () {
     }
   }
 
+  function setGlobalSfxVolume(val) {
+    globalSfxVolume = Math.max(0, Math.min(1, val));
+  }
+
+  function getGlobalSfxVolume() {
+    return globalSfxVolume;
+  }
+
   function playSfx(url, volume) {
     if (!url) return;
     const sfx = new Audio(url);
-    sfx.volume = volume !== undefined ? volume : 0.9;
+    const v = volume !== undefined && volume !== null ? volume : globalSfxVolume;
+    sfx.volume = Math.max(0, Math.min(1, v));
     sfx.play().catch(() => {});
   }
 
@@ -48,6 +59,8 @@ const AudioModule = (function () {
   return {
     getEffectiveBgm,
     updateBgmForLine,
+    setGlobalSfxVolume,
+    getGlobalSfxVolume,
     playSfx,
     stopBgm
   };

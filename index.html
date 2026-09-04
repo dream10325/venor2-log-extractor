@@ -1,255 +1,265 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>提取RP紀錄的</title>
-<link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/player.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>提取RP紀錄的</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/player.css">
 </head>
+
 <body>
-<div class="wrap">
-  <header>
-    <h1>ㄏㄇ牌對話提取器</h1>
-  </header>
+  <div class="wrap">
+    <header>
+      <h1>ㄏㄇ牌對話提取器</h1>
+    </header>
 
-  <div class="grid">
-    <div class="left-col">
-      <div class="card">
-        <h2><span class="n">1</span>輸入原始Log</h2>
-        <div class="dropzone" id="dropZone">
+    <div class="grid">
+      <div class="left-col">
+        <div class="card">
+          <h2><span class="n">1</span>輸入原始Log</h2>
+          <div class="dropzone" id="dropZone">
+            <div class="row">
+              <label class="filebtn">
+                選擇檔案
+                <input type="file" id="fileInput" accept=".txt,.log,.gz">
+              </label>
+              <span class="filename" id="fileName">尚未選擇檔案</span>
+            </div>
+            <p class="dropzone-hint">可以直接把.log跟.log.gz檔案拖曳到這裡，也可以丟已經篩過的txt</p>
+          </div>
+          <label class="field">或直接貼上文字：</label>
+          <textarea id="rawInput" placeholder="將原始log內容貼在這裡"></textarea>
           <div class="row">
-            <label class="filebtn">
-              選擇檔案
-              <input type="file" id="fileInput" accept=".txt,.log,.gz">
+            <button class="btn btn-ghost" id="clearBtn" type="button">清空</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:18px;">
+          <h2><span class="n">2</span>篩選條件</h2>
+
+          <label class="field">頻道</label>
+          <div class="radiorow">
+            <label class="radiobtn"><input type="radio" name="channelMode" value="all" id="channelAll" checked>
+              全部頻道</label>
+            <label class="radiobtn"><input type="radio" name="channelMode" value="some" id="channelSome"> 指定頻道</label>
+          </div>
+          <div class="chipbox" id="channelChips"></div>
+
+          <label class="field">開始時間（24小時制）</label>
+          <div class="timegrid timegrid2">
+            <div class="timefield"><span>點</span><input type="number" id="startHour" min="0" max="23"></div>
+            <div class="timefield"><span>分</span><input type="number" id="startMinute" min="0" max="59"></div>
+          </div>
+
+          <label class="field">結束時間（24小時制）</label>
+          <div class="timegrid timegrid2">
+            <div class="timefield"><span>點</span><input type="number" id="endHour" min="0" max="23"></div>
+            <div class="timefield"><span>分</span><input type="number" id="endMinute" min="0" max="59"></div>
+          </div>
+
+          <label class="field">參與人員</label>
+          <div class="radiorow">
+            <label class="radiobtn"><input type="radio" name="scopeMode" value="all" id="scopeAll" checked> 全員</label>
+            <label class="radiobtn"><input type="radio" name="scopeMode" value="some" id="scopeSome"> 指定名單</label>
+          </div>
+          <div class="chipbox" id="chipHints"></div>
+
+          <label class="toggle" style="margin-top:14px;">
+            <input type="checkbox" id="includeActions" checked>
+            包含 /me 動作訊息
+          </label>
+
+          <label class="toggle">
+            <input type="checkbox" id="applyScopeToActions">
+            「指定名單」也套用到 /me 動作訊息
+          </label>
+
+          <label class="toggle">
+            <input type="checkbox" id="hideDuplicates">
+            隱藏短時間內重複訊息（玩家端功能，你如果在頻道切來切去查看會重複訊息）
+          </label>
+
+          <div class="row" style="margin-top:16px;">
+            <button class="btn btn-primary" id="runBtn" type="button">✨✨✨使用魔法✨✨✨（什麼是魔法）</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-col">
+        <div class="card">
+          <h2><span class="n">3</span>輸出結果</h2>
+          <div id="output"><span class="placeholder">尚未產生結果</span></div>
+          <div class="footer-actions">
+            <button class="btn btn-ghost" id="copyBtn" type="button">複製</button>
+            <button class="btn btn-ghost" id="downloadBtn" type="button">下載</button>
+            <label class="btn btn-ghost" id="importPlayBtn">
+              匯入播放檔案（HTML）
+              <input type="file" id="importPlayInput" accept=".html,.htm">
             </label>
-            <span class="filename" id="fileName">尚未選擇檔案</span>
+            <button class="btn btn-primary" id="playBtn" type="button">播放log</button>
           </div>
-          <p class="dropzone-hint">可以直接把.log跟.log.gz檔案拖曳到這裡，也可以丟已經篩過的txt</p>
-        </div>
-        <label class="field">或直接貼上文字：</label>
-        <textarea id="rawInput" placeholder="將原始log內容貼在這裡"></textarea>
-        <div class="row">
-          <button class="btn btn-ghost" id="clearBtn" type="button">清空</button>
-        </div>
-      </div>
-
-      <div class="card" style="margin-top:18px;">
-        <h2><span class="n">2</span>篩選條件</h2>
-
-        <label class="field">頻道</label>
-        <div class="radiorow">
-          <label class="radiobtn"><input type="radio" name="channelMode" value="all" id="channelAll" checked> 全部頻道</label>
-          <label class="radiobtn"><input type="radio" name="channelMode" value="some" id="channelSome"> 指定頻道</label>
-        </div>
-        <div class="chipbox" id="channelChips"></div>
-
-        <label class="field">開始時間（24小時制）</label>
-        <div class="timegrid timegrid2">
-          <div class="timefield"><span>點</span><input type="number" id="startHour" min="0" max="23"></div>
-          <div class="timefield"><span>分</span><input type="number" id="startMinute" min="0" max="59"></div>
-        </div>
-
-        <label class="field">結束時間（24小時制）</label>
-        <div class="timegrid timegrid2">
-          <div class="timefield"><span>點</span><input type="number" id="endHour" min="0" max="23"></div>
-          <div class="timefield"><span>分</span><input type="number" id="endMinute" min="0" max="59"></div>
-        </div>
-
-        <label class="field">參與人員</label>
-        <div class="radiorow">
-          <label class="radiobtn"><input type="radio" name="scopeMode" value="all" id="scopeAll" checked> 全員</label>
-          <label class="radiobtn"><input type="radio" name="scopeMode" value="some" id="scopeSome"> 指定名單</label>
-        </div>
-        <div class="chipbox" id="chipHints"></div>
-
-        <label class="toggle" style="margin-top:14px;">
-          <input type="checkbox" id="includeActions" checked>
-          包含 /me 動作訊息
-        </label>
-
-        <label class="toggle">
-          <input type="checkbox" id="applyScopeToActions">
-          「指定名單」也套用到 /me 動作訊息
-        </label>
-
-        <label class="toggle">
-          <input type="checkbox" id="hideDuplicates">
-          隱藏短時間內重複訊息（玩家端功能，你如果在頻道切來切去查看會重複訊息）
-        </label>
-
-        <div class="row" style="margin-top:16px;">
-          <button class="btn btn-primary" id="runBtn" type="button">✨✨✨使用魔法✨✨✨（什麼是魔法）</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="right-col">
-      <div class="card">
-        <h2><span class="n">3</span>輸出結果</h2>
-        <div id="output"><span class="placeholder">尚未產生結果</span></div>
-        <div class="footer-actions">
-          <button class="btn btn-ghost" id="copyBtn" type="button">複製</button>
-          <button class="btn btn-ghost" id="downloadBtn" type="button">下載</button>
-          <label class="btn btn-ghost" id="importPlayBtn">
-            匯入播放檔案（HTML）
-            <input type="file" id="importPlayInput" accept=".html,.htm">
-          </label>
-          <button class="btn btn-primary" id="playBtn" type="button">播放log</button>
         </div>
       </div>
     </div>
   </div>
-</div>
 
-<div id="playerView" hidden>
-  <div class="player-topbar">
-    <button class="btn btn-ghost" id="exitPlayerBtn" type="button">← 返回編輯</button>
-    <div class="player-topbar-title">劇情播放模式</div>
-    <button class="btn btn-ghost" id="togglePanelBtn" type="button">⚙ 設定面板</button>
-  </div>
-
-  <div class="player-body">
-    <div class="stage" id="stage">
-      <div class="stage-bg" id="stageBg"></div>
-
-      <div class="portrait-slot portrait-left" id="portraitLeft"><img id="portraitLeftImg" alt=""></div>
-      <div class="portrait-slot portrait-center" id="portraitCenter"><img id="portraitCenterImg" alt=""></div>
-      <div class="portrait-slot portrait-right" id="portraitRight"><img id="portraitRightImg" alt=""></div>
-
-      <div class="stage-illust" id="stageIllust"><img id="stageIllustImg" alt=""></div>
-
-      <div class="vn-click-catcher" id="vnClickCatcher" title="點擊／空白鍵 繼續"></div>
-
-      <div class="vn-box" id="vnBox">
-        <div class="vn-name" id="vnName"></div>
-        <div class="vn-text" id="vnText"></div>
-        <span class="vn-continue-cue">click / space ▸</span>
-        <div class="vn-progress" id="vnProgress">0 / 0</div>
-      </div>
+  <div id="playerView" hidden>
+    <div class="player-topbar">
+      <button class="btn btn-ghost" id="exitPlayerBtn" type="button">← 返回編輯</button>
+      <div class="player-topbar-title">劇情播放模式</div>
+      <button class="btn btn-ghost" id="togglePanelBtn" type="button">⚙ 設定面板</button>
     </div>
 
-    <aside class="player-panel" id="playerPanel">
-      <div class="panel-tabs">
-        <button type="button" class="panel-tab active" data-pane="paneSpeakers">角色</button>
-        <button type="button" class="panel-tab" data-pane="paneLines">劇情</button>
-        <button type="button" class="panel-tab" data-pane="paneSettings">設定</button>
+    <div class="player-body">
+      <div class="stage" id="stage">
+        <div class="stage-bg" id="stageBg"></div>
+
+        <div class="portrait-slot portrait-left" id="portraitLeft"><img id="portraitLeftImg" alt=""></div>
+        <div class="portrait-slot portrait-center" id="portraitCenter"><img id="portraitCenterImg" alt=""></div>
+        <div class="portrait-slot portrait-right" id="portraitRight"><img id="portraitRightImg" alt=""></div>
+
+        <div class="stage-illust" id="stageIllust"><img id="stageIllustImg" alt=""></div>
+
+        <div class="vn-click-catcher" id="vnClickCatcher" title="點擊／空白鍵 繼續"></div>
+
+        <div class="vn-box" id="vnBox">
+          <div class="vn-name" id="vnName"></div>
+          <div class="vn-text" id="vnText"></div>
+          <span class="vn-continue-cue">click / space ▸</span>
+          <div class="vn-progress" id="vnProgress">0 / 0</div>
+        </div>
       </div>
 
-      <div class="panel-pane active" id="paneSpeakers">
-        <p class="panel-section-title">出場角色</p>
-        <div id="speakerList" style="margin-top:10px;"></div>
-      </div>
-
-      <div class="panel-pane" id="paneLines">
-        <p class="panel-section-title">逐行設定</p>
-        <div id="lineList" style="margin-top:10px;"></div>
-      </div>
-
-      <div class="panel-pane" id="paneSettings">
-        <p class="panel-section-title">對話框與文字樣式</p>
-        <div class="settings-field">
-          <label>全域字型</label>
-          <select class="settings-select" id="fontFamilySelect">
-            <option value="Arial, 'Microsoft JhengHei', sans-serif">微軟正黑體 / 無襯線</option>
-            <option value="'Noto Serif TC', 'Songti TC', 'MingLiU', serif">明體 / 襯線字</option>
-            <option value="'DFKai-SB', 'BiauKai', 'KaiTi', serif">標楷體</option>
-            <option value="'Comic Sans MS', 'Yuanti TC', sans-serif">圓體風格</option>
-            <option value="'Courier New', Consolas, monospace">等寬代碼字型</option>
-          </select>
-        </div>
-        <div class="settings-field">
-          <label>基準文字大小：<span class="settings-value" id="fontSizeVal">17px</span></label>
-          <input type="range" id="fontSizeRange" min="13" max="28" step="1" value="17">
-        </div>
-        <div class="settings-field">
-          <label class="toggle">
-            <input type="checkbox" id="fontBoldCheck">
-            文字預設粗體
-          </label>
-        </div>
-        <div class="settings-field">
-          <label class="toggle">
-            <input type="checkbox" id="fontItalicCheck">
-            文字預設斜體
-          </label>
-        </div>
-        <div class="settings-field">
-          <label>基準文字顏色</label>
-          <input type="color" class="color-picker-input" id="textColorInput" value="#f2f2f2">
-        </div>
-        <div class="settings-field">
-          <label>對話框底色</label>
-          <input type="color" class="color-picker-input" id="boxBgColorInput" value="#0e0e11">
-        </div>
-        <div class="settings-field">
-          <label>對話框不透明度：<span class="settings-value" id="boxOpacityVal">86%</span></label>
-          <input type="range" id="boxOpacityRange" min="0.1" max="1" step="0.05" value="0.86">
+      <aside class="player-panel" id="playerPanel">
+        <div class="panel-tabs">
+          <button type="button" class="panel-tab active" data-pane="paneSpeakers">角色</button>
+          <button type="button" class="panel-tab" data-pane="paneLines">劇情</button>
+          <button type="button" class="panel-tab" data-pane="paneSettings">設定</button>
         </div>
 
-        <p class="panel-section-title">場景背景（預設）</p>
-        <div class="settings-field">
-          <label class="mini-file-btn">
-            匯入預設背景
-            <input type="file" accept="image/*" id="defaultBgInput">
-          </label>
-          <div class="play-hint" id="defaultBgFileName">尚未匯入</div>
-          <div class="row" style="margin-top:8px;">
-            <button class="btn btn-ghost" id="defaultBgClearBtn" type="button">清除預設背景</button>
+        <div class="panel-pane active" id="paneSpeakers">
+          <p class="panel-section-title">出場角色</p>
+          <div id="speakerList" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="panel-pane" id="paneLines">
+          <p class="panel-section-title">逐行設定</p>
+          <div id="lineList" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="panel-pane" id="paneSettings">
+          <p class="panel-section-title">對話框與文字樣式</p>
+          <div class="settings-field">
+            <label>全域字型</label>
+            <select class="settings-select" id="fontFamilySelect">
+              <option value="Arial, 'Microsoft JhengHei', sans-serif">微軟正黑體 / 無襯線</option>
+              <option value="'Noto Serif TC', 'Songti TC', 'MingLiU', serif">明體 / 襯線字</option>
+              <option value="'DFKai-SB', 'BiauKai', 'KaiTi', serif">標楷體</option>
+              <option value="'Comic Sans MS', 'Yuanti TC', sans-serif">圓體風格</option>
+              <option value="'Courier New', Consolas, monospace">等寬代碼字型</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label>基準文字大小：<span class="settings-value" id="fontSizeVal">17px</span></label>
+            <input type="range" id="fontSizeRange" min="13" max="28" step="1" value="17">
+          </div>
+          <div class="settings-field">
+            <label class="toggle">
+              <input type="checkbox" id="fontBoldCheck">
+              文字預設粗體
+            </label>
+          </div>
+          <div class="settings-field">
+            <label class="toggle">
+              <input type="checkbox" id="fontItalicCheck">
+              文字預設斜體
+            </label>
+          </div>
+          <div class="settings-field">
+            <label>基準文字顏色</label>
+            <input type="color" class="color-picker-input" id="textColorInput" value="#f2f2f2">
+          </div>
+          <div class="settings-field">
+            <label>對話框底色</label>
+            <input type="color" class="color-picker-input" id="boxBgColorInput" value="#0e0e11">
+          </div>
+          <div class="settings-field">
+            <label>對話框不透明度：<span class="settings-value" id="boxOpacityVal">86%</span></label>
+            <input type="range" id="boxOpacityRange" min="0.1" max="1" step="0.05" value="0.86">
+          </div>
+
+          <p class="panel-section-title">場景背景（預設）</p>
+          <div class="settings-field">
+            <label class="mini-file-btn">
+              匯入預設背景
+              <input type="file" accept="image/*" id="defaultBgInput">
+            </label>
+            <div class="play-hint" id="defaultBgFileName">尚未匯入</div>
+            <div class="row" style="margin-top:8px;">
+              <button class="btn btn-ghost" id="defaultBgClearBtn" type="button">清除預設背景</button>
+            </div>
+          </div>
+
+          <p class="panel-section-title">預設背景音樂</p>
+          <div class="settings-field">
+            <label class="mini-file-btn">
+              匯入預設 BGM
+              <input type="file" accept="audio/*" id="bgmInput">
+            </label>
+            <div class="play-hint" id="bgmFileName">尚未匯入</div>
+            <label style="margin-top:8px;">全域音量：<span class="settings-value" id="bgmVolumeVal">60%</span></label>
+            <input type="range" id="bgmVolume" min="0" max="1" step="0.05" value="0.6">
+            <div class="row" style="margin-top:8px;">
+              <button class="btn btn-ghost" id="bgmStopBtn" type="button">停止當前播放</button>
+            </div>
+          </div>
+
+          <p class="panel-section-title">音效設定</p>
+          <div class="settings-field">
+            <label>全域音效音量：<span class="settings-value" id="sfxGlobalVolumeVal">90%</span></label>
+            <input type="range" id="sfxGlobalVolume" min="0" max="1" step="0.05" value="0.9">
+          </div>
+
+          <p class="panel-section-title">播放節奏</p>
+          <div class="settings-field">
+            <label>逐字顯示速度：<span class="settings-value" id="typeSpeedVal">28 ms/字</span></label>
+            <input type="range" id="typeSpeedRange" min="4" max="80" step="2" value="28">
+          </div>
+          <div class="settings-field">
+            <label>自動播放停留時間：<span class="settings-value" id="autoDelayVal">1.2 秒</span></label>
+            <input type="range" id="autoDelayRange" min="200" max="4000" step="100" value="1200">
+          </div>
+
+          <p class="panel-section-title">其他</p>
+          <div class="settings-field">
+            <button class="btn btn-ghost" id="clearOverridesBtn" type="button">清除所有單句差分指定</button>
           </div>
         </div>
+      </aside>
+    </div>
 
-        <p class="panel-section-title">預設背景音樂</p>
-        <div class="settings-field">
-          <label class="mini-file-btn">
-            匯入預設 BGM
-            <input type="file" accept="audio/*" id="bgmInput">
-          </label>
-          <div class="play-hint" id="bgmFileName">尚未匯入</div>
-          <label style="margin-top:8px;">全域音量：<span class="settings-value" id="bgmVolumeVal">60%</span></label>
-          <input type="range" id="bgmVolume" min="0" max="1" step="0.05" value="0.6">
-          <div class="row" style="margin-top:8px;">
-            <button class="btn btn-ghost" id="bgmStopBtn" type="button">停止當前播放</button>
-          </div>
-        </div>
+    <div class="player-controlbar">
+      <button class="btn btn-ghost" id="prevLineBtn" type="button">◀ 上一句</button>
+      <button class="btn btn-ghost" id="nextLineBtn" type="button">下一句 ▶</button>
+      <button class="btn btn-ghost" id="autoPlayBtn" type="button">▶ 自動播放</button>
+      <button class="btn btn-ghost" id="restartPlayBtn" type="button">⟲ 從頭開始</button>
+      <button class="btn btn-ghost" id="exportHtmlBtn" type="button">⤓ 匯出成 HTML</button>
+      <div class="spacer"></div>
+      <span class="play-hint">空白鍵/Enter/→ 繼續 ←上一句 Esc 離開</span>
+    </div>
 
-        <p class="panel-section-title">播放節奏</p>
-        <div class="settings-field">
-          <label>逐字顯示速度：<span class="settings-value" id="typeSpeedVal">28 ms/字</span></label>
-          <input type="range" id="typeSpeedRange" min="4" max="80" step="2" value="28">
-        </div>
-        <div class="settings-field">
-          <label>自動播放停留時間：<span class="settings-value" id="autoDelayVal">1.2 秒</span></label>
-          <input type="range" id="autoDelayRange" min="200" max="4000" step="100" value="1200">
-        </div>
-
-        <p class="panel-section-title">其他</p>
-        <div class="settings-field">
-          <button class="btn btn-ghost" id="clearOverridesBtn" type="button">清除所有單句差分指定</button>
-        </div>
-      </div>
-    </aside>
+    <audio id="bgmAudio" loop></audio>
   </div>
 
-  <div class="player-controlbar">
-    <button class="btn btn-ghost" id="prevLineBtn" type="button">◀ 上一句</button>
-    <button class="btn btn-ghost" id="nextLineBtn" type="button">下一句 ▶</button>
-    <button class="btn btn-ghost" id="autoPlayBtn" type="button">▶ 自動播放</button>
-    <button class="btn btn-ghost" id="restartPlayBtn" type="button">⟲ 從頭開始</button>
-    <button class="btn btn-ghost" id="exportHtmlBtn" type="button">⤓ 匯出成 HTML</button>
-    <div class="spacer"></div>
-    <span class="play-hint">空白鍵/Enter/→ 繼續 ←上一句 Esc 離開</span>
-  </div>
-
-  <audio id="bgmAudio" loop></audio>
-</div>
-
-<script src="js/extractor.js"></script>
-<script src="js/bbcode.js"></script>
-<script src="js/audio.js"></script>
-<script src="js/stage.js"></script>
-<script src="js/export.js"></script>
-<script src="js/editor.js"></script>
-<script src="js/main.js"></script>
+  <script src="js/extractor.js"></script>
+  <script src="js/bbcode.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/stage.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/main.js"></script>
 </body>
+
 </html>

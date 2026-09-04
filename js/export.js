@@ -32,7 +32,8 @@ const ExportModule = (function () {
       for (const p of (sp.portraits || [])) {
         portsOut.push({
           name: p.name,
-          data: p.file ? await fileToDataURL(p.file) : p.url
+          data: p.file ? await fileToDataURL(p.file) : p.url,
+          flip: !!p.flip
         });
       }
       speakersOut[name] = {
@@ -51,13 +52,16 @@ const ExportModule = (function () {
     for (const key of Object.keys(state.lineOverrides)) {
       const ov = state.lineOverrides[key];
       const out = {};
+      if (ov.speaker) out.speaker = ov.speaker;
       if (ov.portraitIdx !== undefined && ov.portraitIdx !== null) out.portraitIdx = ov.portraitIdx;
+      if (ov.flip !== undefined) out.flip = ov.flip;
       if (ov.bgFile) out.bg = await fileToDataURL(ov.bgFile);
       else if (ov.bgURL && ov.bgURL.startsWith('data:')) out.bg = ov.bgURL;
       if (ov.illustFile) out.illust = await fileToDataURL(ov.illustFile);
       else if (ov.illustURL && ov.illustURL.startsWith('data:')) out.illust = ov.illustURL;
       if (ov.sfxFile) out.sfx = await fileToDataURL(ov.sfxFile);
       else if (ov.sfxURL && ov.sfxURL.startsWith('data:')) out.sfx = ov.sfxURL;
+      if (ov.sfxVolume !== undefined) out.sfxVolume = ov.sfxVolume;
       if (ov.bgmAction) {
         out.bgmAction = ov.bgmAction;
         if (ov.bgmFile) out.bgm = await fileToDataURL(ov.bgmFile);
@@ -73,6 +77,7 @@ const ExportModule = (function () {
       defaultBg: state.defaultBgFile ? await fileToDataURL(state.defaultBgFile) : (state.defaultBgURL && state.defaultBgURL.startsWith('data:') ? state.defaultBgURL : null),
       defaultBgm: state.defaultBgmFile ? await fileToDataURL(state.defaultBgmFile) : (state.defaultBgmURL && state.defaultBgmURL.startsWith('data:') ? state.defaultBgmURL : null),
       bgmVolume: state.bgmVolume,
+      sfxVolume: AudioModule.getGlobalSfxVolume(),
       typeSpeed: state.typeSpeed,
       autoDelay: state.autoDelay,
       textStyle: state.textStyle
@@ -106,9 +111,10 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
 .stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;background:#111114 radial-gradient(ellipse at 50% 30%, #1c1c22 0%, #0c0c0f 70%);display:flex;align-items:flex-end;justify-content:center;cursor:pointer;user-select:none;}
 .stage-bg{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .25s ease;opacity:0;}
 .stage-bg.on{opacity:1;}
-.portrait-slot{position:absolute;bottom:0;height:82%;width:34%;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;opacity:0;transition:opacity .18s ease, transform .18s ease, filter .18s ease;filter:brightness(.55) saturate(.7);transform-origin:bottom center;}
-.portrait-slot img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 10px 24px rgba(0,0,0,.55));}
+.portrait-slot{position:absolute;bottom:0;height:82%;width:34%;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;opacity:0;transition:opacity .2s ease, filter .2s ease;transform-origin:bottom center;}
+.portrait-slot img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 10px 24px rgba(0,0,0,.55));transition:transform .2s ease;}
 .portrait-slot.active{opacity:1;filter:brightness(1) saturate(1);}
+.portrait-slot.active.dimmed{filter:brightness(.45) saturate(.6);}
 .stage-illust{position:absolute;top:45%;left:50%;transform:translate(-50%, -50%) scale(0.92);z-index:3;pointer-events:none;opacity:0;transition:opacity 0.22s ease, transform 0.22s ease;max-width:80%;max-height:55%;display:flex;align-items:center;justify-content:center;}
 .stage-illust.active{opacity:1;transform:translate(-50%, -50%) scale(1);}
 .stage-illust img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 12px 32px rgba(0,0,0,0.8));border-radius:8px;}
@@ -155,6 +161,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
 (function(){
   const DATA = ${json};
   const state = { index:0, typing:false, typeTimer:null, autoPlay:false, autoTimer:null, currentBgmKey:null };
+  const stageSlots = { left:null, center:null, right:null };
   function $(id){ return document.getElementById(id); }
   function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
   function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -199,7 +206,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
           if (stack[i].tag === tag) { stack.splice(i, 1); break; }
         }
       } else {
-        stack.push({ tag, val });
+        stack.push({ tag: tag, val: val });
       }
       lastIndex = regex.lastIndex;
     }
@@ -305,10 +312,11 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     return sp.portraits[defIdx] ? sp.portraits[defIdx].data : sp.portraits[0].data;
   }
 
-  function applyTransform(slot, sp){
+  function applyTransform(slot, imgEl, sp, flip){
     const scale = sp.scale || 1;
     const offX = sp.offsetX || 0;
     const offY = sp.offsetY || 0;
+    const scaleX = flip ? -1 : 1;
     if(sp.position === 'center'){
       slot.style.left = "calc(50% + " + offX + "px)";
       slot.style.right = 'auto';
@@ -322,6 +330,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
       slot.style.right = "calc(2% - " + offX + "px)";
       slot.style.transform = "translateY(" + offY + "px) scale(" + scale + ")";
     }
+    imgEl.style.transform = "scaleX(" + scaleX + ")";
   }
 
   function showLine(idx, redrawOnly){
@@ -332,12 +341,6 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     const line = DATA.script[idx];
     const ov = DATA.overrides[line.key] || {};
     $('vnProgress').textContent = (idx+1) + ' / ' + DATA.script.length;
-
-    ['Left','Center','Right'].forEach(function(pos){
-      const slot = $('portrait' + pos);
-      slot.classList.remove('active');
-      slot.style.left = ''; slot.style.right = ''; slot.style.transform = '';
-    });
 
     const bgURL = ov.bg || DATA.defaultBg || null;
     const stageBg = $('stageBg');
@@ -352,31 +355,60 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     updateBgm(idx);
 
     const vnBox = $('vnBox');
-    const sp = line.player ? DATA.speakers[line.player] : null;
+    let activeSpeakerName = null;
+    let targetSpeaker = null;
+
     if(line.type === 'chat'){
       vnBox.classList.remove('narration');
-      $('vnName').textContent = sp ? sp.displayName : (line.player || '未知角色');
-      vnBox.style.setProperty('--vn-name-color', sp ? sp.color : '#800020');
-      const img = resolvePortrait(sp, ov);
-      const posKey = capitalize(sp ? sp.position : 'center');
-      const slot = $('portrait' + posKey);
-      if(img){ $('portrait' + posKey + 'Img').src = img; applyTransform(slot, sp); slot.classList.add('active'); }
+      targetSpeaker = line.player ? DATA.speakers[line.player] : null;
+      $('vnName').textContent = targetSpeaker ? targetSpeaker.displayName : (line.player || '未知角色');
+      vnBox.style.setProperty('--vn-name-color', targetSpeaker ? targetSpeaker.color : '#800020');
+      activeSpeakerName = targetSpeaker ? targetSpeaker.name : null;
     } else {
       vnBox.classList.add('narration');
       $('vnName').textContent = '';
-      const img = resolvePortrait(sp, ov);
-      if(sp && img){
-        const posKey = capitalize(sp.position);
-        const slot = $('portrait' + posKey);
-        $('portrait' + posKey + 'Img').src = img;
-        applyTransform(slot, sp);
-        slot.classList.add('active');
+      if(ov.speaker && DATA.speakers[ov.speaker]){
+        targetSpeaker = DATA.speakers[ov.speaker];
+      } else if(line.player && DATA.speakers[line.player]){
+        targetSpeaker = DATA.speakers[line.player];
+      }
+      activeSpeakerName = targetSpeaker ? targetSpeaker.name : null;
+    }
+
+    if(targetSpeaker){
+      const pos = targetSpeaker.position || 'center';
+      const img = resolvePortrait(targetSpeaker, ov);
+      if(img){
+        const isFlip = (ov.flip !== undefined) ? !!ov.flip : (targetSpeaker.portraits && targetSpeaker.portraits[ov.portraitIdx || targetSpeaker.defaultPortraitIdx || 0] && !!targetSpeaker.portraits[ov.portraitIdx || targetSpeaker.defaultPortraitIdx || 0].flip);
+        stageSlots[pos] = { speaker: targetSpeaker, img: img, flip: isFlip };
       }
     }
 
+    ['left','center','right'].forEach(function(pos){
+      const posKey = capitalize(pos);
+      const slot = $('portrait' + posKey);
+      const imgEl = $('portrait' + posKey + 'Img');
+      const data = stageSlots[pos];
+      if(data && data.img){
+        imgEl.src = data.img;
+        applyTransform(slot, imgEl, data.speaker, data.flip);
+        slot.classList.add('active');
+        if(activeSpeakerName && data.speaker.name === activeSpeakerName){
+          slot.classList.remove('dimmed');
+        } else {
+          slot.classList.add('dimmed');
+        }
+      } else {
+        slot.classList.remove('active');
+        slot.classList.remove('dimmed');
+        slot.style.left = ''; slot.style.right = ''; slot.style.transform = '';
+        imgEl.style.transform = ''; imgEl.removeAttribute('src');
+      }
+    });
+
     if(!redrawOnly && ov.sfx){
       const sfx = new Audio(ov.sfx);
-      sfx.volume = 0.9;
+      sfx.volume = ov.sfxVolume !== undefined ? ov.sfxVolume : (DATA.sfxVolume !== undefined ? DATA.sfxVolume : 0.9);
       sfx.play().catch(function(){});
     }
     if(redrawOnly) return;
@@ -430,7 +462,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
   $('prevBtn').addEventListener('click', function(){ setAutoPlay(false); prevLine(); });
   $('nextBtn').addEventListener('click', function(){ setAutoPlay(false); advance(); });
   $('autoBtn').addEventListener('click', function(){ setAutoPlay(!state.autoPlay); });
-  $('restartBtn').addEventListener('click', function(){ setAutoPlay(false); showLine(0, false); });
+  $('restartBtn').addEventListener('click', function(){ setAutoPlay(false); stageSlots.left=null; stageSlots.center=null; stageSlots.right=null; showLine(0, false); });
   document.addEventListener('keydown', function(e){
     if(e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight'){ e.preventDefault(); advance(); }
     else if(e.key === 'ArrowLeft'){ setAutoPlay(false); prevLine(); }
@@ -463,7 +495,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
       const sp = data.speakers[name] || {};
       const ports = (sp.portraits || []).map(p => {
         const file = dataURLtoFile(p.data, p.name);
-        return { name: p.name, file, url: p.data };
+        return { name: p.name, file, url: p.data, flip: !!p.flip };
       });
       state.speakers[name] = {
         name,
@@ -484,10 +516,13 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     Object.keys(data.overrides || {}).forEach(key => {
       const ov = data.overrides[key] || {};
       const out = {};
+      if (ov.speaker) out.speaker = ov.speaker;
       if (ov.portraitIdx !== undefined && ov.portraitIdx !== null) out.portraitIdx = ov.portraitIdx;
+      if (ov.flip !== undefined) out.flip = ov.flip;
       if (ov.bg) { const f = dataURLtoFile(ov.bg, 'line_bg'); out.bgURL = ov.bg; out.bgFile = f; out.bgName = f ? f.name : ''; }
       if (ov.illust) { const f = dataURLtoFile(ov.illust, 'line_illust'); out.illustURL = ov.illust; out.illustFile = f; out.illustName = f ? f.name : ''; }
       if (ov.sfx) { const f = dataURLtoFile(ov.sfx, 'line_sfx'); out.sfxURL = ov.sfx; out.sfxFile = f; out.sfxName = f ? f.name : ''; }
+      if (ov.sfxVolume !== undefined) out.sfxVolume = ov.sfxVolume;
       if (ov.bgmAction) {
         out.bgmAction = ov.bgmAction;
         if (ov.bgm) { const f = dataURLtoFile(ov.bgm, 'line_bgm'); out.bgmURL = ov.bgm; out.bgmFile = f; out.bgmName = f ? f.name : ''; }
@@ -504,6 +539,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     state.defaultBgmName = state.defaultBgmFile ? state.defaultBgmFile.name : (data.defaultBgm ? '（已匯入BGM）' : '');
 
     state.bgmVolume = (data.bgmVolume != null) ? data.bgmVolume : 0.6;
+    if (data.sfxVolume != null) AudioModule.setGlobalSfxVolume(data.sfxVolume);
     state.typeSpeed = data.typeSpeed || 28;
     state.autoDelay = data.autoDelay || 1200;
     if (data.textStyle) state.textStyle = Object.assign({}, state.textStyle, data.textStyle);
