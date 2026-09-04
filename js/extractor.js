@@ -10,6 +10,9 @@ const CLIENT_ACTION_RE_CHANNEL = /^\[(\d{2}:\d{2}:\d{2})\] \[Render thread\/INFO
 const CLIENT_ACTION_RE = /^\[(\d{2}:\d{2}:\d{2})\] \[Render thread\/INFO\]: (?:\[Not Secure\] )?(?:\[System\] )?\[CHAT\] (\*.*)$/;
 const CHAT_NAME_MSG_SPLIT_RE = / {3,}/;
 
+const CLEAN_CHAT_RE = /^<([^>]+)>\s*(.*)$/;
+const CLEAN_ACTION_RE = /^\*(.*)$/;
+
 let entries = [];
 
 function parseLogDate(dateStr, timeStr){
@@ -108,6 +111,33 @@ function parseLog(text){
     if(m){
       const date = parseClientTime(m[1]);
       result.push({type:'action', date, player:null, text:m[2], raw:m[2], channel:null});
+      continue;
+    }
+
+    m = line.match(CLEAN_CHAT_RE);
+    if(m){
+      const player = m[1].trim();
+      let text_ = m[2];
+      let count = 1;
+      const rMatch = text_.match(/\s*\(x(\d+)\)$/);
+      if(rMatch){
+        count = parseInt(rMatch[1], 10);
+        text_ = text_.slice(0, rMatch.index);
+      }
+      result.push({type:'chat', date:null, player, text:text_, count, channel:null, raw: `<${player}> ${text_}`});
+      continue;
+    }
+
+    m = line.match(CLEAN_ACTION_RE);
+    if(m){
+      let actionText = line;
+      let count = 1;
+      const rMatch = actionText.match(/\s*\(x(\d+)\)$/);
+      if(rMatch){
+        count = parseInt(rMatch[1], 10);
+        actionText = actionText.slice(0, rMatch.index);
+      }
+      result.push({type:'action', date:null, player:null, text:actionText, count, raw:actionText, channel:null});
       continue;
     }
   }
@@ -346,6 +376,7 @@ function readTimeField(prefix, second){
 function runFilter(){
   const startSec = readTimeField('start', 0);
   const endSec = readTimeField('end', 59);
+  const hasTimeFilter = (startSec !== null || endSec !== null);
 
   const scopeAll = document.getElementById('scopeAll').checked;
   const selectedLower = scopeAll ? [] : Array.from(selectedPlayers).map(p=>p.toLowerCase());
@@ -357,17 +388,19 @@ function runFilter(){
 
   const out = [];
   for(const e of entries){
-    if(!e.date) continue;
-    const sec = entrySecondsOfDay(e);
-    if(startSec !== null && endSec !== null){
-      const inRange = (startSec <= endSec)
-        ? (sec >= startSec && sec <= endSec)
-        : (sec >= startSec || sec <= endSec);
-      if(!inRange) continue;
-    } else if(startSec !== null){
-      if(sec < startSec) continue;
-    } else if(endSec !== null){
-      if(sec > endSec) continue;
+    if(hasTimeFilter){
+      if(!e.date) continue;
+      const sec = entrySecondsOfDay(e);
+      if(startSec !== null && endSec !== null){
+        const inRange = (startSec <= endSec)
+          ? (sec >= startSec && sec <= endSec)
+          : (sec >= startSec || sec <= endSec);
+        if(!inRange) continue;
+      } else if(startSec !== null){
+        if(sec < startSec) continue;
+      } else if(endSec !== null){
+        if(sec > endSec) continue;
+      }
     }
 
     if(e.type === 'chat'){
@@ -402,12 +435,12 @@ function dedupeEntries(list, thresholdMs){
   for(const e of list){
     const key = `${e.type}|${e.channel || ''}|${e.player || ''}|${e.text}`;
     const prev = lastSeen.get(key);
-    if(prev && (e.date - prev.date) <= thresholdMs){
+    if(prev && e.date && prev.date && (e.date - prev.date) <= thresholdMs){
       prev.date = e.date;
       prev.entry.count += 1;
       continue;
     }
-    const entryCopy = Object.assign({}, e, {count: 1});
+    const entryCopy = Object.assign({}, e, {count: e.count || 1});
     lastSeen.set(key, {date: e.date, entry: entryCopy});
     output.push(entryCopy);
   }

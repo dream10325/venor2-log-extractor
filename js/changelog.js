@@ -1,5 +1,12 @@
 const CHANGELOG_DATA = [
   {
+    version: "v1.1.1",
+    date: "2026-09-04",
+    logs: [
+      "修了無法載入已處理完的log問題"
+    ]
+  },
+  {
     version: "v1.1.0",
     date: "2026-09-04",
     logs: [
