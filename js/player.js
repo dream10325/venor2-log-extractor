@@ -863,6 +863,32 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     importExportedHtmlFile(file);
     e.target.value = '';
   });
+  const panel = $('playerPanel');
+  ['dragenter', 'dragover'].forEach(evt => {
+    panel.addEventListener(evt, e => {
+      const target = e.target.closest('.mini-file-btn, .speaker-portrait-preview');
+      if (target) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+  });
+  panel.addEventListener('drop', e => {
+    const target = e.target.closest('.mini-file-btn, .speaker-portrait-preview');
+    if (target) {
+      e.preventDefault();
+      e.stopPropagation();
+      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!file) return;
+      const input = target.matches('.mini-file-btn')
+        ? target.querySelector('input[type=file]')
+        : target.closest('.speaker-card').querySelector('input[data-role=portrait]');
+      if (input) {
+        input.files = e.dataTransfer.files;
+        input.dispatchEvent(new Event('change'));
+      }
+    }
+  });
   $('exitPlayerBtn').addEventListener('click', closePlayer);
   $('vnClickCatcher').addEventListener('click', handleAdvance);
 
