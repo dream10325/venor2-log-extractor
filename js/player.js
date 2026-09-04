@@ -35,8 +35,7 @@
     }
   };
 
-  let activeEditor = null;
-  let savedRange = null;
+  const lineUndoHistory = {};
 
   function $(id) { return document.getElementById(id); }
   function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -98,270 +97,255 @@
     return line.type === 'action' ? actionDisplayText(line) : line.text;
   }
 
-  function rgbToHex(rgb) {
-    if (!rgb) return '';
-    if (rgb.startsWith('#')) return rgb;
-    const m = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-    if (!m) return rgb;
-    const r = parseInt(m[1], 10).toString(16).padStart(2, '0');
-    const g = parseInt(m[2], 10).toString(16).padStart(2, '0');
-    const b = parseInt(m[3], 10).toString(16).padStart(2, '0');
-    return `#${r}${g}${b}`;
+  function stripAllBBCode(text) {
+    return (text || '').replace(/\[\/?(b|i|color|bg|size)(?:=[^\]]+)?\]/gi, '');
   }
 
-  function domToBBCode(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.nodeValue;
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) {
-      return '';
-    }
-
-    const tag = node.tagName.toLowerCase();
-    if (tag === 'br') {
-      return '\n';
-    }
-
-    let childText = '';
-    for (let i = 0; i < node.childNodes.length; i++) {
-      childText += domToBBCode(node.childNodes[i]);
-    }
-
-    if (!childText) {
-      return '';
-    }
-
-    let prefix = '';
-    if ((tag === 'div' || tag === 'p') && node.previousSibling) {
-      prefix = '\n';
-    }
-
-    let openTags = '';
-    let closeTags = '';
-
-    const isBold = tag === 'b' || tag === 'strong' || node.style.fontWeight === 'bold' || parseInt(node.style.fontWeight, 10) >= 600;
-    const isItalic = tag === 'i' || tag === 'em' || node.style.fontStyle === 'italic';
-    const color = node.style.color && node.style.color !== 'inherit' ? rgbToHex(node.style.color) : null;
-    const bg = node.style.backgroundColor &&
-      node.style.backgroundColor !== 'inherit' &&
-      node.style.backgroundColor !== 'transparent' &&
-      node.style.backgroundColor !== 'rgba(0, 0, 0, 0)'
-      ? rgbToHex(node.style.backgroundColor) : null;
-    const size = node.style.fontSize ? node.style.fontSize.replace('px', '').trim() : null;
-
-    if (isBold) { openTags += '[b]'; closeTags = '[/b]' + closeTags; }
-    if (isItalic) { openTags += '[i]'; closeTags = '[/i]' + closeTags; }
-    if (color) { openTags += `[color=${color}]`; closeTags = `[/color]` + closeTags; }
-    if (bg) { openTags += `[bg=${bg}]`; closeTags = `[/bg]` + closeTags; }
-    if (size) { openTags += `[size=${size}]`; closeTags = `[/size]` + closeTags; }
-
-    return prefix + openTags + childText + closeTags;
+  function triggerInput(ta) {
+    ta.dispatchEvent(new Event('input'));
+    ta.focus();
   }
 
-  function unwrap(el) {
-    const parent = el.parentNode;
-    if (!parent) return;
-    while (el.firstChild) {
-      parent.insertBefore(el.firstChild, el);
+  function getLineHistory(idx, initialVal) {
+    if (!lineUndoHistory[idx]) {
+      lineUndoHistory[idx] = {
+        undo: [{ val: initialVal, start: 0, end: 0 }],
+        redo: []
+      };
     }
-    parent.removeChild(el);
+    return lineUndoHistory[idx];
   }
 
-  function cleanEmptySpans(root) {
-    const spans = root.querySelectorAll ? Array.from(root.querySelectorAll('span')) : [];
-    if (root.tagName && root.tagName.toLowerCase() === 'span') spans.push(root);
-    for (const s of spans) {
-      if (!s.parentNode) continue;
-      const style = s.getAttribute('style');
-      if (!style || !style.trim()) {
-        unwrap(s);
+  function pushUndoState(idx, ta) {
+    const hist = getLineHistory(idx, ta.value);
+    const currentVal = ta.value;
+    const last = hist.undo[hist.undo.length - 1];
+    if (!last || last.val !== currentVal) {
+      hist.undo.push({
+        val: currentVal,
+        start: ta.selectionStart,
+        end: ta.selectionEnd
+      });
+      if (hist.undo.length > 60) hist.undo.shift();
+      hist.redo = [];
+    }
+  }
+
+  function doUndo(idx, ta) {
+    clearTimeout(ta._typingTimer);
+    const hist = getLineHistory(idx, ta.value);
+    const last = hist.undo[hist.undo.length - 1];
+    if (last && last.val !== ta.value) {
+      hist.redo.push({
+        val: ta.value,
+        start: ta.selectionStart,
+        end: ta.selectionEnd
+      });
+      ta.value = last.val;
+      ta.selectionStart = last.start;
+      ta.selectionEnd = last.end;
+      ta._isHistoryAction = true;
+      triggerInput(ta);
+      ta._isHistoryAction = false;
+      return;
+    }
+    if (hist.undo.length <= 1) return;
+    const current = hist.undo.pop();
+    hist.redo.push({
+      val: ta.value,
+      start: ta.selectionStart,
+      end: ta.selectionEnd
+    });
+    const prev = hist.undo[hist.undo.length - 1];
+    ta.value = prev.val;
+    ta.selectionStart = prev.start;
+    ta.selectionEnd = prev.end;
+    ta._isHistoryAction = true;
+    triggerInput(ta);
+    ta._isHistoryAction = false;
+  }
+
+  function doRedo(idx, ta) {
+    clearTimeout(ta._typingTimer);
+    const hist = getLineHistory(idx, ta.value);
+    if (hist.redo.length === 0) return;
+    const next = hist.redo.pop();
+    hist.undo.push({
+      val: ta.value,
+      start: ta.selectionStart,
+      end: ta.selectionEnd
+    });
+    ta.value = next.val;
+    ta.selectionStart = next.start;
+    ta.selectionEnd = next.end;
+    ta._isHistoryAction = true;
+    triggerInput(ta);
+    ta._isHistoryAction = false;
+  }
+
+  function applySimpleTag(idx, ta, tag) {
+    pushUndoState(idx, ta);
+    let start = ta.selectionStart;
+    let end = ta.selectionEnd;
+    const val = ta.value;
+    const openTag = `[${tag}]`;
+    const closeTag = `[/${tag}]`;
+    const tagRegex = new RegExp(`\\[\\/?${tag}\\]`, 'gi');
+
+    if (start === end) {
+      const placeholder = '文字';
+      ta.value = val.slice(0, start) + openTag + placeholder + closeTag + val.slice(end);
+      ta.selectionStart = start + openTag.length;
+      ta.selectionEnd = start + openTag.length + placeholder.length;
+      pushUndoState(idx, ta);
+      triggerInput(ta);
+      return;
+    }
+
+    if (start >= openTag.length && end + closeTag.length <= val.length &&
+        val.slice(start - openTag.length, start).toLowerCase() === openTag.toLowerCase() &&
+        val.slice(end, end + closeTag.length).toLowerCase() === closeTag.toLowerCase()) {
+      ta.value = val.slice(0, start - openTag.length) + val.slice(start, end) + val.slice(end + closeTag.length);
+      ta.selectionStart = start - openTag.length;
+      ta.selectionEnd = end - openTag.length;
+      pushUndoState(idx, ta);
+      triggerInput(ta);
+      return;
+    }
+
+    const sel = val.slice(start, end);
+    const fullWrapRegex = new RegExp(`^\\[${tag}\\]([\\s\\S]*?)\\[\\/${tag}\\]$`, 'i');
+    const match = sel.match(fullWrapRegex);
+    if (match) {
+      const inner = match[1];
+      ta.value = val.slice(0, start) + inner + val.slice(end);
+      ta.selectionStart = start;
+      ta.selectionEnd = start + inner.length;
+      pushUndoState(idx, ta);
+      triggerInput(ta);
+      return;
+    }
+
+    if (tagRegex.test(sel)) {
+      const cleaned = sel.replace(tagRegex, '');
+      ta.value = val.slice(0, start) + cleaned + val.slice(end);
+      ta.selectionStart = start;
+      ta.selectionEnd = start + cleaned.length;
+      pushUndoState(idx, ta);
+      triggerInput(ta);
+      return;
+    }
+
+    const wrapped = openTag + sel + closeTag;
+    ta.value = val.slice(0, start) + wrapped + val.slice(end);
+    ta.selectionStart = start + openTag.length;
+    ta.selectionEnd = start + openTag.length + sel.length;
+    pushUndoState(idx, ta);
+    triggerInput(ta);
+  }
+
+  function applyParamTag(idx, ta, tag, paramVal) {
+    pushUndoState(idx, ta);
+    let start = ta.selectionStart;
+    let end = ta.selectionEnd;
+    const val = ta.value;
+    const openTag = `[${tag}=${paramVal}]`;
+    const closeTag = `[/${tag}]`;
+
+    if (start === end) {
+      const placeholder = '文字';
+      ta.value = val.slice(0, start) + openTag + placeholder + closeTag + val.slice(end);
+      ta.selectionStart = start + openTag.length;
+      ta.selectionEnd = start + openTag.length + placeholder.length;
+      pushUndoState(idx, ta);
+      triggerInput(ta);
+      return;
+    }
+
+    const before = val.slice(0, start);
+    const after = val.slice(end);
+    const openPattern = new RegExp(`\\[(${tag})=([^\\]]+)\\]$`, 'i');
+    const closePattern = new RegExp(`^\\[\\/(${tag})\\]`, 'i');
+
+    const beforeMatch = before.match(openPattern);
+    const afterMatch = after.match(closePattern);
+
+    if (beforeMatch && afterMatch) {
+      const newBefore = before.slice(0, before.length - beforeMatch[0].length) + openTag;
+      const newAfter = closeTag + after.slice(afterMatch[0].length);
+      const sel = val.slice(start, end);
+      ta.value = newBefore + sel + newAfter;
+      const newStart = before.length - beforeMatch[0].length + openTag.length;
+      ta.selectionStart = newStart;
+      ta.selectionEnd = newStart + sel.length;
+      pushUndoState(idx, ta);
+      triggerInput(ta);
+      return;
+    }
+
+    const sel = val.slice(start, end);
+    const wrapPattern = new RegExp(`^\\[${tag}=([^\\]]+)\\]([\\s\\S]*?)\\[\\/${tag}\\]$`, 'i');
+    const wrapMatch = sel.match(wrapPattern);
+
+    if (wrapMatch) {
+      const inner = wrapMatch[2];
+      const newSel = openTag + inner + closeTag;
+      ta.value = before + newSel + after;
+      ta.selectionStart = start + openTag.length;
+      ta.selectionEnd = start + openTag.length + inner.length;
+      pushUndoState(idx, ta);
+      triggerInput(ta);
+      return;
+    }
+
+    const internalTagRegex = new RegExp(`\\[\\/?${tag}(?:=[^\\]]+)?\\]`, 'gi');
+    const cleanedSel = sel.replace(internalTagRegex, '');
+    const wrapped = openTag + cleanedSel + closeTag;
+    ta.value = before + wrapped + after;
+    ta.selectionStart = start + openTag.length;
+    ta.selectionEnd = start + openTag.length + cleanedSel.length;
+    pushUndoState(idx, ta);
+    triggerInput(ta);
+  }
+
+  function clearFormatting(idx, ta) {
+    pushUndoState(idx, ta);
+    let start = ta.selectionStart;
+    let end = ta.selectionEnd;
+    let val = ta.value;
+
+    if (start === end) {
+      const cleaned = stripAllBBCode(val);
+      ta.value = cleaned;
+      ta.selectionStart = 0;
+      ta.selectionEnd = cleaned.length;
+      pushUndoState(idx, ta);
+      triggerInput(ta);
+      return;
+    }
+
+    let before = val.slice(0, start);
+    let sel = val.slice(start, end);
+    let after = val.slice(end);
+
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      const openM = before.match(/\[(b|i|color|bg|size)(?:=[^\]]+)?\]$/i);
+      const closeM = after.match(/^\[\/(b|i|color|bg|size)\]/i);
+      if (openM && closeM && openM[1].toLowerCase() === closeM[1].toLowerCase()) {
+        before = before.slice(0, before.length - openM[0].length);
+        after = after.slice(closeM[0].length);
+        expanded = true;
       }
     }
-  }
 
-  function saveSelection(editor) {
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      const r = sel.getRangeAt(0);
-      if (editor.contains(r.commonAncestorContainer)) {
-        savedRange = r.cloneRange();
-        activeEditor = editor;
-      }
-    }
-  }
-
-  function restoreSelection(editor) {
-    if (savedRange && activeEditor === editor) {
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(savedRange);
-      editor.focus();
-    }
-  }
-
-  function getTextNodesInRange(range) {
-    const textNodes = [];
-    const root = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-      ? range.commonAncestorContainer.parentNode
-      : range.commonAncestorContainer;
-    const walker = document.createTreeWalker(
-      root,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode(node) {
-          return range.intersectsNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-        }
-      }
-    );
-    while (walker.nextNode()) {
-      if (walker.currentNode.nodeValue.length > 0) {
-        textNodes.push(walker.currentNode);
-      }
-    }
-    return textNodes;
-  }
-
-  function nodeHasStyle(node, type, value, editor) {
-    let cur = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-    while (cur && cur !== editor) {
-      if (type === 'b') {
-        const t = cur.tagName.toLowerCase();
-        if (t === 'b' || t === 'strong' || cur.style.fontWeight === 'bold' || parseInt(cur.style.fontWeight, 10) >= 600) {
-          return true;
-        }
-      } else if (type === 'i') {
-        const t = cur.tagName.toLowerCase();
-        if (t === 'i' || t === 'em' || cur.style.fontStyle === 'italic') {
-          return true;
-        }
-      } else if (type === 'size') {
-        if (cur.style.fontSize) {
-          const s = cur.style.fontSize.replace('px', '').trim();
-          if (!value || s === String(value).replace('px', '').trim()) return true;
-        }
-      } else if (type === 'color') {
-        if (cur.style.color) {
-          if (!value || rgbToHex(cur.style.color).toLowerCase() === value.toLowerCase()) return true;
-        }
-      } else if (type === 'bg') {
-        if (cur.style.backgroundColor && cur.style.backgroundColor !== 'transparent' && cur.style.backgroundColor !== 'rgba(0, 0, 0, 0)') {
-          if (!value || rgbToHex(cur.style.backgroundColor).toLowerCase() === value.toLowerCase()) return true;
-        }
-      }
-      cur = cur.parentElement;
-    }
-    return false;
-  }
-
-  function removeStyleFromFragment(frag, type) {
-    const elements = frag.querySelectorAll ? Array.from(frag.querySelectorAll('*')) : [];
-    if (frag.nodeType === Node.ELEMENT_NODE) elements.unshift(frag);
-    for (const el of elements) {
-      if (type === 'b') {
-        if (el.tagName.toLowerCase() === 'b' || el.tagName.toLowerCase() === 'strong') unwrap(el);
-        else el.style.fontWeight = '';
-      } else if (type === 'i') {
-        if (el.tagName.toLowerCase() === 'i' || el.tagName.toLowerCase() === 'em') unwrap(el);
-        else el.style.fontStyle = '';
-      } else if (type === 'size') {
-        el.style.fontSize = '';
-      } else if (type === 'color') {
-        el.style.color = '';
-      } else if (type === 'bg') {
-        el.style.backgroundColor = '';
-        el.style.borderRadius = '';
-        el.style.padding = '';
-      }
-    }
-    cleanEmptySpans(frag);
-  }
-
-  function stripAllFormatting(frag) {
-    const clean = document.createDocumentFragment();
-    function recurse(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        clean.appendChild(node.cloneNode(true));
-        return;
-      }
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const t = node.tagName.toLowerCase();
-        if (t === 'br') {
-          clean.appendChild(document.createElement('br'));
-          return;
-        }
-        for (let i = 0; i < node.childNodes.length; i++) {
-          recurse(node.childNodes[i]);
-        }
-      }
-    }
-    recurse(frag);
-    return clean;
-  }
-
-  function applyFormatToSelection(editor, type, value) {
-    restoreSelection(editor);
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    const range = sel.getRangeAt(0);
-
-    const textNodes = getTextNodesInRange(range);
-    if (!textNodes.length) return;
-
-    const nonSpaceNodes = textNodes.filter(n => n.nodeValue.trim().length > 0);
-    const checkNodes = nonSpaceNodes.length > 0 ? nonSpaceNodes : textNodes;
-    const isAlreadyActive = checkNodes.length > 0 && checkNodes.every(n => nodeHasStyle(n, type, value, editor));
-
-    const fragment = range.extractContents();
-    let resultNode = null;
-
-    if (type === 'clear') {
-      resultNode = stripAllFormatting(fragment);
-    } else if (isAlreadyActive) {
-      removeStyleFromFragment(fragment, type);
-      resultNode = fragment;
-    } else {
-      if (type === 'size' || type === 'color' || type === 'bg') {
-        removeStyleFromFragment(fragment, type);
-      }
-      const span = document.createElement('span');
-      if (type === 'b') span.style.fontWeight = 'bold';
-      else if (type === 'i') span.style.fontStyle = 'italic';
-      else if (type === 'size') span.style.fontSize = value + 'px';
-      else if (type === 'color') span.style.color = value;
-      else if (type === 'bg') {
-        span.style.backgroundColor = value;
-        span.style.borderRadius = '3px';
-        span.style.padding = '0 2px';
-      }
-      span.appendChild(fragment);
-      resultNode = span;
-    }
-
-    const firstNode = resultNode.firstChild || resultNode;
-    const lastNode = resultNode.lastChild || resultNode;
-    range.insertNode(resultNode);
-
-    try {
-      const newRange = document.createRange();
-      newRange.setStartBefore(firstNode);
-      newRange.setEndAfter(lastNode);
-      sel.removeAllRanges();
-      sel.addRange(newRange);
-      savedRange = newRange.cloneRange();
-      activeEditor = editor;
-    } catch (err) { }
-
-    syncEditorToState(editor);
-  }
-
-  function syncEditorToState(editor) {
-    const idx = parseInt(editor.getAttribute('data-index'), 10);
-    state.script[idx].text = domToBBCode(editor);
-    if (idx === state.index) {
-      clearTyping();
-      const full = displayTextFor(state.script[idx]) + repeatSuffixSafe(state.script[idx]);
-      $('vnText').innerHTML = tokensToHtml(parseFormattedTokens(full));
-    }
+    sel = stripAllBBCode(sel);
+    ta.value = before + sel + after;
+    ta.selectionStart = before.length;
+    ta.selectionEnd = before.length + sel.length;
+    pushUndoState(idx, ta);
+    triggerInput(ta);
   }
 
   function parseFormattedTokens(text) {
@@ -425,10 +409,10 @@
     function isSameStyle(s1, s2) {
       if (!s1 || !s2) return s1 === s2;
       return s1.bold === s2.bold &&
-        s1.italic === s2.italic &&
-        s1.color === s2.color &&
-        s1.bg === s2.bg &&
-        s1.size === s2.size;
+             s1.italic === s2.italic &&
+             s1.color === s2.color &&
+             s1.bg === s2.bg &&
+             s1.size === s2.size;
     }
 
     function buildStyleAttr(st) {
@@ -510,6 +494,7 @@
   function openPlayerUI() {
     state.index = 0;
     state.currentBgmKey = null;
+    Object.keys(lineUndoHistory).forEach(k => delete lineUndoHistory[k]);
     applyTextStyle();
     renderSpeakerPanel();
     renderLinePanel();
@@ -709,12 +694,12 @@
       const sp = line.player ? state.speakers[line.player] : null;
 
       const tags = [];
-      if (ov.portraitIdx !== undefined && ov.portraitIdx !== null) tags.push('<span class="line-override-tag">🎭 指定立繪</span>');
-      if (ov.bgURL) tags.push('<span class="line-override-tag">🌄 背景更換</span>');
-      if (ov.bgmAction === 'set') tags.push('<span class="line-override-tag">🎵 切換BGM</span>');
-      if (ov.bgmAction === 'stop') tags.push('<span class="line-override-tag">🔇 停止BGM</span>');
-      if (ov.illustURL) tags.push('<span class="line-override-tag">🖼️ 插圖道具</span>');
-      if (ov.sfxURL) tags.push('<span class="line-override-tag">🔊 音效</span>');
+      if (ov.portraitIdx !== undefined && ov.portraitIdx !== null) tags.push('<span class="line-override-tag">[立繪]</span>');
+      if (ov.bgURL) tags.push('<span class="line-override-tag">[換背景]</span>');
+      if (ov.bgmAction === 'set') tags.push('<span class="line-override-tag">[換BGM]</span>');
+      if (ov.bgmAction === 'stop') tags.push('<span class="line-override-tag">[停BGM]</span>');
+      if (ov.illustURL) tags.push('<span class="line-override-tag">[插圖]</span>');
+      if (ov.sfxURL) tags.push('<span class="line-override-tag">[音效]</span>');
 
       let portraitSelectHtml = '';
       if (sp && sp.portraits && sp.portraits.length > 0) {
@@ -728,8 +713,6 @@
         `;
       }
 
-      const formattedInnerHtml = tokensToHtml(parseFormattedTokens(line.text));
-
       return `
       <div class="line-row" data-index="${i}">
         <div class="line-row-head">
@@ -738,14 +721,14 @@
           <span class="line-speaker">${escapeHtml(speakerLabel)}</span>
         </div>
         <div class="line-fmt-bar" data-index="${i}">
-          <button type="button" class="fmt-btn" data-fmt="b" title="粗體開關"><b>B</b></button>
-          <button type="button" class="fmt-btn" data-fmt="i" title="斜體開關"><i>I</i></button>
-          <select class="fmt-select" data-fmt="size" title="字級設定/切換">
+          <button type="button" class="fmt-btn" data-fmt="b" title="粗體"><b>B</b></button>
+          <button type="button" class="fmt-btn" data-fmt="i" title="斜體"><i>I</i></button>
+          <select class="fmt-select" data-fmt="size" title="字級">
             <option value="">字級</option>
-            <option value="14">小 (14px)</option>
-            <option value="20">中 (20px)</option>
-            <option value="26">大 (26px)</option>
-            <option value="34">特大 (34px)</option>
+            <option value="14">小</option>
+            <option value="20">中</option>
+            <option value="26">大</option>
+            <option value="34">特大</option>
           </select>
           <label class="fmt-color-label" title="選取文字顏色">
             字色<input type="color" data-fmt="color" value="#ff5555">
@@ -753,9 +736,9 @@
           <label class="fmt-color-label" title="選取文字底色">
             底色<input type="color" data-fmt="bg" value="#ffee55">
           </label>
-          <button type="button" class="fmt-btn fmt-clear-btn" data-fmt="clear" title="清除選取文字格式">🧹</button>
+          <button type="button" class="fmt-btn-text" data-fmt="clear" title="清除選取樣式或整行樣式">清除樣式</button>
         </div>
-        <div class="line-text-edit" contenteditable="true" data-role="line-text" data-index="${i}">${formattedInnerHtml}</div>
+        <textarea class="line-text-edit" data-role="line-text" data-index="${i}" rows="2">${escapeHtml(line.text)}</textarea>
         <div class="line-row-actions">
           ${portraitSelectHtml}
           <label class="mini-file-btn" onclick="event.stopPropagation()">
@@ -782,14 +765,35 @@
     }).join('');
 
     box.querySelectorAll('.line-fmt-bar').forEach(bar => {
-      const editor = bar.parentElement.querySelector('.line-text-edit[data-role=line-text]');
+      const idx = parseInt(bar.getAttribute('data-index'), 10);
+      const ta = bar.parentElement.querySelector('textarea[data-role=line-text]');
+      let savedStart = 0;
+      let savedEnd = 0;
+
+      function saveSelection() {
+        savedStart = ta.selectionStart;
+        savedEnd = ta.selectionEnd;
+      }
+
+      function restoreSelection() {
+        ta.selectionStart = savedStart;
+        ta.selectionEnd = savedEnd;
+      }
+
+      bar.addEventListener('pointerdown', () => {
+        saveSelection();
+      });
 
       bar.querySelectorAll('button[data-fmt]').forEach(btn => {
-        btn.addEventListener('mousedown', e => e.preventDefault());
         btn.addEventListener('click', e => {
           e.stopPropagation();
+          restoreSelection();
           const fmt = btn.getAttribute('data-fmt');
-          applyFormatToSelection(editor, fmt);
+          if (fmt === 'b' || fmt === 'i') {
+            applySimpleTag(idx, ta, fmt);
+          } else if (fmt === 'clear') {
+            clearFormatting(idx, ta);
+          }
         });
       });
 
@@ -798,59 +802,85 @@
       sizeSel.addEventListener('change', e => {
         e.stopPropagation();
         if (!sizeSel.value) return;
-        applyFormatToSelection(editor, 'size', sizeSel.value);
+        restoreSelection();
+        applyParamTag(idx, ta, 'size', sizeSel.value);
         sizeSel.value = '';
       });
 
       const colorInp = bar.querySelector('input[data-fmt=color]');
       colorInp.parentElement.addEventListener('click', e => e.stopPropagation());
-      colorInp.addEventListener('input', e => {
-        applyFormatToSelection(editor, 'color', colorInp.value);
+      colorInp.addEventListener('change', e => {
+        restoreSelection();
+        applyParamTag(idx, ta, 'color', colorInp.value);
       });
 
       const bgInp = bar.querySelector('input[data-fmt=bg]');
       bgInp.parentElement.addEventListener('click', e => e.stopPropagation());
-      bgInp.addEventListener('input', e => {
-        applyFormatToSelection(editor, 'bg', bgInp.value);
-      });
-    });
-
-    box.querySelectorAll('.line-text-edit[data-role=line-text]').forEach(editor => {
-      editor.addEventListener('click', e => e.stopPropagation());
-      editor.addEventListener('focus', () => {
-        activeEditor = editor;
-      });
-      ['keyup', 'mouseup'].forEach(evt => {
-        editor.addEventListener(evt, () => {
-          saveSelection(editor);
-        });
-      });
-      editor.addEventListener('input', () => {
-        syncEditorToState(editor);
-      });
-      editor.addEventListener('paste', e => {
-        e.preventDefault();
-        const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-        document.execCommand('insertText', false, text);
-        syncEditorToState(editor);
-      });
-      editor.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          document.execCommand('insertLineBreak');
-          syncEditorToState(editor);
-        }
+      bgInp.addEventListener('change', e => {
+        restoreSelection();
+        applyParamTag(idx, ta, 'bg', bgInp.value);
       });
     });
 
     box.querySelectorAll('.line-row').forEach(row => {
-      row.addEventListener('click', (e) => {
-        if (e.target.closest('.line-fmt-bar') || e.target.closest('.line-text-edit') || e.target.closest('.line-row-actions')) {
-          return;
-        }
+      row.addEventListener('click', () => {
         const idx = parseInt(row.getAttribute('data-index'), 10);
         setAutoPlay(false);
         showLine(idx, { resetTyping: true });
+      });
+    });
+
+    box.querySelectorAll('textarea[data-role=line-text]').forEach(ta => {
+      const idx = parseInt(ta.getAttribute('data-index'), 10);
+      getLineHistory(idx, ta.value);
+
+      ta.addEventListener('click', e => e.stopPropagation());
+
+      ta.addEventListener('focus', () => {
+        pushUndoState(idx, ta);
+      });
+
+      ta.addEventListener('compositionend', () => {
+        pushUndoState(idx, ta);
+      });
+
+      ta.addEventListener('keydown', e => {
+        e.stopPropagation();
+
+        const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+        const isCtrl = isMac ? e.metaKey : e.ctrlKey;
+        const key = e.key ? e.key.toLowerCase() : '';
+
+        const isUndo = isCtrl && key === 'z' && !e.shiftKey;
+        const isRedo = (isCtrl && key === 'y') || (isCtrl && key === 'z' && e.shiftKey);
+
+        if (isUndo) {
+          e.preventDefault();
+          doUndo(idx, ta);
+          return;
+        }
+
+        if (isRedo) {
+          e.preventDefault();
+          doRedo(idx, ta);
+          return;
+        }
+      });
+
+      ta.addEventListener('input', () => {
+        state.script[idx].text = ta.value;
+        if (idx === state.index) {
+          clearTyping();
+          const full = displayTextFor(state.script[idx]) + repeatSuffixSafe(state.script[idx]);
+          $('vnText').innerHTML = tokensToHtml(parseFormattedTokens(full));
+        }
+
+        if (ta._isHistoryAction) return;
+
+        clearTimeout(ta._typingTimer);
+        ta._typingTimer = setTimeout(() => {
+          pushUndoState(idx, ta);
+        }, 400);
       });
     });
 
@@ -1004,7 +1034,7 @@
       audio.src = eff.url;
       audio.volume = state.bgmVolume;
       audio.loop = true;
-      audio.play().catch(() => { });
+      audio.play().catch(() => {});
     }
   }
 
@@ -1102,7 +1132,7 @@
     if (!opts.redrawOnly && ov.sfxURL) {
       const sfx = new Audio(ov.sfxURL);
       sfx.volume = 0.9;
-      sfx.play().catch(() => { });
+      sfx.play().catch(() => {});
     }
 
     if (opts.redrawOnly) return;
@@ -1162,7 +1192,7 @@
     state.autoPlay = on;
     const btn = $('autoPlayBtn');
     btn.classList.toggle('autoplay-on', on);
-    btn.textContent = on ? '⏸ 自動播放中' : '▶ 自動播放';
+    btn.textContent = on ? '自動播放中' : '自動播放';
     clearAutoTimer();
     if (on && !state.typing) onLineFullyShown();
   }
@@ -1213,7 +1243,7 @@
       if (ov.bgmAction) {
         out.bgmAction = ov.bgmAction;
         if (ov.bgmFile) out.bgm = await fileToDataURL(ov.bgmFile);
-        else if (ov.bgmURL && ov.bgmURL.startsWith('data:')) out.bgm = ov.bgmURL;
+        else if (ov.bgmURL && ov.bgmURL.startsWith('data:')) out.bg = ov.bgmURL;
       }
       if (Object.keys(out).length) overridesOut[key] = out;
     }
@@ -1297,7 +1327,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
   <div class="controlbar">
     <button class="btn" id="prevBtn" type="button">◀ 上一句</button>
     <button class="btn" id="nextBtn" type="button">下一句 ▶</button>
-    <button class="btn" id="autoBtn" type="button">▶ 自動播放</button>
+    <button class="btn" id="autoBtn" type="button">自動播放</button>
     <button class="btn" id="restartBtn" type="button">⟲ 從頭開始</button>
     <span class="hint">空白鍵/Enter/→ 繼續 ←上一句</span>
   </div>
@@ -1573,7 +1603,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     state.autoPlay = on;
     const btn = $('autoBtn');
     btn.classList.toggle('autoplay-on', on);
-    btn.textContent = on ? '⏸ 自動播放中' : '▶ 自動播放';
+    btn.textContent = on ? '自動播放中' : '自動播放';
     if(state.autoTimer){ clearTimeout(state.autoTimer); state.autoTimer = null; }
     if(on && !state.typing) onFullyShown();
   }
@@ -1854,6 +1884,8 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
 
   document.addEventListener('keydown', e => {
     if ($('playerView').hidden) return;
+    const tag = e.target.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT') return;
     if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
       e.preventDefault();
       handleAdvance();
