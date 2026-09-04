@@ -45,7 +45,17 @@ const StageModule = (function () {
     return sp.portraits[defIdx] ? sp.portraits[defIdx].url : sp.portraits[0].url;
   }
 
-  function resolveBackgroundURL(ov, defaultBgURL) {
+  function resolveBackgroundURL(idx, script, lineOverrides, defaultBgURL) {
+    if (typeof idx === 'number' && script && lineOverrides) {
+      for (let i = idx; i >= 0; i--) {
+        const l = script[i];
+        if (!l) continue;
+        const ov = lineOverrides[l.key];
+        if (ov && ov.bgURL) return ov.bgURL;
+      }
+      return defaultBgURL || null;
+    }
+    const ov = idx;
     return (ov && ov.bgURL) || defaultBgURL || null;
   }
 
@@ -92,11 +102,10 @@ const StageModule = (function () {
     stageSlots.right = null;
   }
 
-  function renderStage(line, ov, sp, defaultBgURL, speakers) {
+  function renderStage(line, ov, sp, bgURL, speakers) {
     const vnBox = document.getElementById('vnBox');
     const stageBg = document.getElementById('stageBg');
 
-    const bgURL = resolveBackgroundURL(ov, defaultBgURL);
     if (bgURL) {
       stageBg.style.backgroundImage = `url('${bgURL}')`;
       stageBg.classList.add('on');

@@ -113,7 +113,8 @@
     $('vnProgress').textContent = `${idx + 1} / ${state.script.length}`;
     EditorModule.highlightCurrentLineRow(idx);
 
-    StageModule.renderStage(line, ov, sp, state.defaultBgURL, state.speakers);
+    const effectiveBgURL = StageModule.resolveBackgroundURL(idx, state.script, state.lineOverrides, state.defaultBgURL);
+    StageModule.renderStage(line, ov, sp, effectiveBgURL, state.speakers);
     AudioModule.updateBgmForLine(idx, state);
 
     if (!opts.redrawOnly && ov.sfxURL) {

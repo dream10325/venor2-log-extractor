@@ -287,6 +287,15 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     return DATA.defaultBgm ? { key: 'default', url: DATA.defaultBgm } : null;
   }
 
+  function getEffectiveBg(idx){
+    for(let i = idx; i >= 0; i--){
+      const l = DATA.script[i];
+      const ov = DATA.overrides[l.key];
+      if(ov && ov.bg) return ov.bg;
+    }
+    return DATA.defaultBg || null;
+  }
+
   function updateBgm(idx){
     const eff = getEffectiveBgm(idx);
     const audio = $('bgmAudio');
@@ -342,7 +351,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     const ov = DATA.overrides[line.key] || {};
     $('vnProgress').textContent = (idx+1) + ' / ' + DATA.script.length;
 
-    const bgURL = ov.bg || DATA.defaultBg || null;
+    const bgURL = getEffectiveBg(idx);
     const stageBg = $('stageBg');
     if(bgURL){ stageBg.style.backgroundImage = "url('" + bgURL + "')"; stageBg.classList.add('on'); }
     else { stageBg.classList.remove('on'); stageBg.style.backgroundImage = ''; }
