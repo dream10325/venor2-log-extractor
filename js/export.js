@@ -134,7 +134,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
 </head>
 <body>
 <div id="app">
-  <div class="topbar">RPG Replay Player</div>
+  <div class="topbar">Venor2</div>
   <div class="stage" id="stage">
     <div class="stage-bg" id="stageBg"></div>
     <div class="portrait-slot" id="portraitLeft"><img id="portraitLeftImg" alt=""></div>
