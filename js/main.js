@@ -1,0 +1,423 @@
+(function () {
+
+  const COLOR_PALETTE = [
+    '#800020', '#1d5fae', '#2e7d32', '#8e44ad', '#c2740c',
+    '#0b7285', '#a12f5e', '#5d4037', '#37474f', '#6a1b9a'
+  ];
+
+  const state = {
+    script: [],
+    speakers: {},
+    lineOverrides: {},
+    defaultBgURL: null,
+    defaultBgFile: null,
+    defaultBgName: '',
+    defaultBgmURL: null,
+    defaultBgmFile: null,
+    defaultBgmName: '',
+    bgmVolume: 0.6,
+    currentBgmKey: null,
+    index: 0,
+    typing: false,
+    typeTimer: null,
+    typeSpeed: 28,
+    autoDelay: 1200,
+    autoPlay: false,
+    autoTimer: null,
+    textStyle: {
+      fontFamily: "Arial, 'Microsoft JhengHei', sans-serif",
+      fontSize: 17,
+      bold: false,
+      italic: false,
+      textColor: '#f2f2f2',
+      boxBgColor: '#0e0e11',
+      boxOpacity: 0.86
+    }
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  function lineKey(e) {
+    return `${e.type}|${e.player || ''}|${e.text}`;
+  }
+
+  function colorForSpeaker(name) {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) { hash = (hash * 31 + name.charCodeAt(i)) >>> 0; }
+    return COLOR_PALETTE[hash % COLOR_PALETTE.length];
+  }
+
+  function ensureSpeaker(name) {
+    if (!state.speakers[name]) {
+      const used = Object.values(state.speakers).map(s => s.position);
+      let pos = 'center';
+      if (!used.includes('left')) pos = 'left';
+      else if (!used.includes('right')) pos = 'right';
+      state.speakers[name] = {
+        name,
+        displayName: name,
+        color: colorForSpeaker(name),
+        portraits: [],
+        defaultPortraitIdx: 0,
+        position: pos,
+        scale: 1,
+        offsetX: 0,
+        offsetY: 0
+      };
+    }
+    return state.speakers[name];
+  }
+
+  function getSourceEntries() {
+    if (typeof lastFiltered !== 'undefined' && lastFiltered.length) return lastFiltered;
+    if (typeof entries !== 'undefined' && entries.length) {
+      lastFiltered = runFilter();
+      renderOutput(lastFiltered);
+      return lastFiltered;
+    }
+    return [];
+  }
+
+  function buildScript(src) {
+    state.script = src.map(e => ({
+      type: e.type,
+      player: e.player,
+      text: e.text,
+      count: e.count,
+      key: lineKey(e),
+    }));
+    state.script.forEach(line => {
+      if (line.player) ensureSpeaker(line.player);
+    });
+  }
+
+  function clearTyping() {
+    if (state.typeTimer) { clearInterval(state.typeTimer); state.typeTimer = null; }
+    state.typing = false;
+  }
+
+  function clearAutoTimer() {
+    if (state.autoTimer) { clearTimeout(state.autoTimer); state.autoTimer = null; }
+  }
+
+  function showLine(idx, opts) {
+    opts = opts || {};
+    if (idx < 0 || idx >= state.script.length) return;
+    state.index = idx;
+    clearAutoTimer();
+
+    const line = state.script[idx];
+    const ov = state.lineOverrides[line.key] || {};
+    const sp = line.player ? (state.speakers[line.player] || ensureSpeaker(line.player)) : null;
+
+    $('vnProgress').textContent = `${idx + 1} / ${state.script.length}`;
+    EditorModule.highlightCurrentLineRow(idx);
+
+    StageModule.renderStage(line, ov, sp, state.defaultBgURL);
+    AudioModule.updateBgmForLine(idx, state);
+
+    if (!opts.redrawOnly && ov.sfxURL) {
+      AudioModule.playSfx(ov.sfxURL, 0.9);
+    }
+
+    if (opts.redrawOnly) return;
+
+    clearTyping();
+    const textEl = $('vnText');
+    const full = StageModule.displayTextFor(line, state.speakers) + StageModule.repeatSuffixSafe(line);
+    const tokens = BBCodeModule.parseFormattedTokens(full);
+    textEl.innerHTML = '';
+    let i = 0;
+    state.typing = true;
+    state.typeTimer = setInterval(() => {
+      i++;
+      textEl.innerHTML = BBCodeModule.tokensToHtml(tokens.slice(0, i));
+      if (i >= tokens.length) {
+        clearTyping();
+        onLineFullyShown();
+      }
+    }, Math.max(6, state.typeSpeed));
+  }
+
+  function completeTyping() {
+    if (!state.typing) return;
+    clearTyping();
+    const line = state.script[state.index];
+    const full = StageModule.displayTextFor(line, state.speakers) + StageModule.repeatSuffixSafe(line);
+    const tokens = BBCodeModule.parseFormattedTokens(full);
+    $('vnText').innerHTML = BBCodeModule.tokensToHtml(tokens);
+    onLineFullyShown();
+  }
+
+  function onLineFullyShown() {
+    if (state.autoPlay) {
+      state.autoTimer = setTimeout(() => {
+        if (!nextLine()) setAutoPlay(false);
+      }, state.autoDelay);
+    }
+  }
+
+  function nextLine() {
+    if (state.index >= state.script.length - 1) return false;
+    showLine(state.index + 1, { resetTyping: true });
+    return true;
+  }
+
+  function prevLine() {
+    if (state.index <= 0) return false;
+    showLine(state.index - 1, { resetTyping: true });
+    return true;
+  }
+
+  function handleAdvance() {
+    if (state.typing) { completeTyping(); return; }
+    nextLine();
+  }
+
+  function setAutoPlay(on) {
+    state.autoPlay = on;
+    const btn = $('autoPlayBtn');
+    btn.classList.toggle('autoplay-on', on);
+    btn.textContent = on ? '自動播放中' : '自動播放';
+    clearAutoTimer();
+    if (on && !state.typing) onLineFullyShown();
+  }
+
+  function editorCallbacks() {
+    return {
+      onRedraw: () => showLine(state.index, { resetTyping: false, redrawOnly: true }),
+      onUpdateLines: () => EditorModule.renderLinePanel(state, editorCallbacks()),
+      onSelectLine: (idx) => {
+        setAutoPlay(false);
+        showLine(idx, { resetTyping: true });
+      },
+      onCurrentLineTextChange: () => {
+        clearTyping();
+        const full = StageModule.displayTextFor(state.script[state.index], state.speakers) + StageModule.repeatSuffixSafe(state.script[state.index]);
+        $('vnText').innerHTML = BBCodeModule.tokensToHtml(BBCodeModule.parseFormattedTokens(full));
+      },
+      onBgmChange: (idx) => AudioModule.updateBgmForLine(idx, state)
+    };
+  }
+
+  function syncSettingsPanelFromState() {
+    $('defaultBgFileName').textContent = state.defaultBgName || (state.defaultBgURL ? '（已匯入背景）' : '尚未匯入');
+    $('bgmFileName').textContent = state.defaultBgmName || (state.defaultBgmURL ? '（已匯入BGM）' : '尚未匯入');
+    $('bgmVolume').value = state.bgmVolume;
+    $('bgmVolumeVal').textContent = Math.round(state.bgmVolume * 100) + '%';
+    $('typeSpeedRange').value = state.typeSpeed;
+    $('typeSpeedVal').textContent = state.typeSpeed + ' ms/字';
+    $('autoDelayRange').value = state.autoDelay;
+    $('autoDelayVal').textContent = (state.autoDelay / 1000).toFixed(1) + ' 秒';
+
+    $('fontFamilySelect').value = state.textStyle.fontFamily;
+    $('fontSizeRange').value = state.textStyle.fontSize;
+    $('fontSizeVal').textContent = state.textStyle.fontSize + 'px';
+    $('fontBoldCheck').checked = state.textStyle.bold;
+    $('fontItalicCheck').checked = state.textStyle.italic;
+    $('textColorInput').value = state.textStyle.textColor;
+    $('boxBgColorInput').value = state.textStyle.boxBgColor;
+    $('boxOpacityRange').value = state.textStyle.boxOpacity;
+    $('boxOpacityVal').textContent = Math.round(state.textStyle.boxOpacity * 100) + '%';
+    StageModule.applyTextStyle(state.textStyle);
+  }
+
+  function openPlayerUI() {
+    state.index = 0;
+    state.currentBgmKey = null;
+    EditorModule.clearHistory();
+    StageModule.applyTextStyle(state.textStyle);
+    EditorModule.renderSpeakerPanel(state, editorCallbacks());
+    EditorModule.renderLinePanel(state, editorCallbacks());
+    syncSettingsPanelFromState();
+    $('playerView').hidden = false;
+    document.body.style.overflow = 'hidden';
+    showLine(0, { resetTyping: true });
+  }
+
+  function openPlayer() {
+    const src = getSourceEntries();
+    if (!src.length) {
+      alert('目前沒有可播放的內容，請先在上方貼上/匯入 Log，並確認「輸出結果」有東西。');
+      return;
+    }
+    buildScript(src);
+    openPlayerUI();
+  }
+
+  function closePlayer() {
+    setAutoPlay(false);
+    clearTyping();
+    AudioModule.stopBgm(state);
+    $('playerView').hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  async function exportStandaloneHtml() {
+    const btn = $('exportHtmlBtn');
+    if (!state.script.length) {
+      alert('目前沒有可匯出的內容');
+      return;
+    }
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '匯出中（素材較多可能要等一下）';
+    try {
+      const payload = await ExportModule.buildExportPayload(state);
+      const html = ExportModule.buildStandaloneHtml(payload);
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vn_playback.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('匯出失敗：' + (err && err.message ? err.message : err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  }
+
+  async function importExportedHtmlFile(file) {
+    try {
+      const text = await file.text();
+      const data = ExportModule.parseExportedHtmlData(text);
+      ExportModule.loadStateFromExportedData(data, state, ensureSpeaker, colorForSpeaker);
+      openPlayerUI();
+      syncSettingsPanelFromState();
+    } catch (err) {
+      alert('匯入失敗：' + (err && err.message ? err.message : err));
+    }
+  }
+
+  $('playBtn').addEventListener('click', openPlayer);
+  $('importPlayInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    importExportedHtmlFile(file);
+    e.target.value = '';
+  });
+
+  $('exitPlayerBtn').addEventListener('click', closePlayer);
+  $('vnClickCatcher').addEventListener('click', handleAdvance);
+
+  $('prevLineBtn').addEventListener('click', () => { setAutoPlay(false); prevLine(); });
+  $('nextLineBtn').addEventListener('click', () => { setAutoPlay(false); handleAdvance(); });
+  $('autoPlayBtn').addEventListener('click', () => { setAutoPlay(!state.autoPlay); });
+  $('restartPlayBtn').addEventListener('click', () => { setAutoPlay(false); showLine(0, { resetTyping: true }); });
+  $('exportHtmlBtn').addEventListener('click', exportStandaloneHtml);
+
+  $('togglePanelBtn').addEventListener('click', () => {
+    $('playerPanel').hidden = !$('playerPanel').hidden;
+  });
+
+  document.querySelectorAll('.panel-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel-pane').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      $(tab.getAttribute('data-pane')).classList.add('active');
+    });
+  });
+
+  $('fontFamilySelect').addEventListener('change', e => {
+    state.textStyle.fontFamily = e.target.value;
+    StageModule.applyTextStyle(state.textStyle);
+  });
+  $('fontSizeRange').addEventListener('input', e => {
+    state.textStyle.fontSize = parseInt(e.target.value, 10);
+    $('fontSizeVal').textContent = state.textStyle.fontSize + 'px';
+    StageModule.applyTextStyle(state.textStyle);
+  });
+  $('fontBoldCheck').addEventListener('change', e => {
+    state.textStyle.bold = e.target.checked;
+    StageModule.applyTextStyle(state.textStyle);
+  });
+  $('fontItalicCheck').addEventListener('change', e => {
+    state.textStyle.italic = e.target.checked;
+    StageModule.applyTextStyle(state.textStyle);
+  });
+  $('textColorInput').addEventListener('input', e => {
+    state.textStyle.textColor = e.target.value;
+    StageModule.applyTextStyle(state.textStyle);
+  });
+  $('boxBgColorInput').addEventListener('input', e => {
+    state.textStyle.boxBgColor = e.target.value;
+    StageModule.applyTextStyle(state.textStyle);
+  });
+  $('boxOpacityRange').addEventListener('input', e => {
+    state.textStyle.boxOpacity = parseFloat(e.target.value);
+    $('boxOpacityVal').textContent = Math.round(state.textStyle.boxOpacity * 100) + '%';
+    StageModule.applyTextStyle(state.textStyle);
+  });
+
+  $('defaultBgInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    state.defaultBgURL = URL.createObjectURL(file);
+    state.defaultBgFile = file;
+    state.defaultBgName = file.name;
+    $('defaultBgFileName').textContent = file.name;
+    showLine(state.index, { resetTyping: false, redrawOnly: true });
+  });
+  $('defaultBgClearBtn').addEventListener('click', () => {
+    state.defaultBgURL = null;
+    state.defaultBgFile = null;
+    state.defaultBgName = '';
+    $('defaultBgFileName').textContent = '尚未匯入';
+    showLine(state.index, { resetTyping: false, redrawOnly: true });
+  });
+
+  $('bgmInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    state.defaultBgmURL = URL.createObjectURL(file);
+    state.defaultBgmFile = file;
+    state.defaultBgmName = file.name;
+    $('bgmFileName').textContent = file.name;
+    AudioModule.updateBgmForLine(state.index, state);
+  });
+  $('bgmVolume').addEventListener('input', e => {
+    state.bgmVolume = parseFloat(e.target.value);
+    $('bgmAudio').volume = state.bgmVolume;
+    $('bgmVolumeVal').textContent = Math.round(state.bgmVolume * 100) + '%';
+  });
+  $('bgmStopBtn').addEventListener('click', () => {
+    AudioModule.stopBgm(state);
+  });
+
+  $('typeSpeedRange').addEventListener('input', e => {
+    state.typeSpeed = parseInt(e.target.value, 10);
+    $('typeSpeedVal').textContent = state.typeSpeed + ' ms/字';
+  });
+  $('autoDelayRange').addEventListener('input', e => {
+    state.autoDelay = parseInt(e.target.value, 10);
+    $('autoDelayVal').textContent = (state.autoDelay / 1000).toFixed(1) + ' 秒';
+  });
+  $('clearOverridesBtn').addEventListener('click', () => {
+    if (!confirm('確定要清除所有單句指定的差分設定嗎？')) return;
+    state.lineOverrides = {};
+    EditorModule.renderLinePanel(state, editorCallbacks());
+    showLine(state.index, { resetTyping: false, redrawOnly: true });
+  });
+
+  document.addEventListener('keydown', e => {
+    if ($('playerView').hidden) return;
+    const tag = e.target.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      handleAdvance();
+    } else if (e.key === 'ArrowLeft') {
+      setAutoPlay(false);
+      prevLine();
+    } else if (e.key === 'Escape') {
+      closePlayer();
+    }
+  });
+
+})();
