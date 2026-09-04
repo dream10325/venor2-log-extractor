@@ -498,8 +498,22 @@
   gap:8px;
   margin-bottom:8px;
 }
-.speaker-swatch{
-  width:10px;height:10px;border-radius:50%;flex:0 0 auto;
+.speaker-color-input{
+  width:18px;
+  height:18px;
+  padding:0;
+  border:none;
+  border-radius:50%;
+  cursor:pointer;
+  background:none;
+  flex:0 0 auto;
+}
+.speaker-color-input::-webkit-color-swatch-wrapper{
+  padding:0;
+}
+.speaker-color-input::-webkit-color-swatch{
+  border:1px solid #45454e;
+  border-radius:50%;
 }
 .speaker-card-name{
   font-family:var(--mono);
