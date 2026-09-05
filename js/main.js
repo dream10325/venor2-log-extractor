@@ -617,3 +617,40 @@
   });
 
 })();
+
+// Keep the right column (輸出結果 + 更新紀錄) capped to the left column's
+// (篩選條件) natural height on the two-column desktop layout, instead of
+// letting the grid stretch the shorter column to match a tall changelog.
+// The changelog area then just scrolls internally within whatever room
+// is left. On the stacked/mobile layout the columns aren't side by side,
+// so the imposed height is cleared and each just uses its own content size.
+(function () {
+  const leftCol = document.querySelector('.left-col');
+  const rightCol = document.querySelector('.right-col');
+  if (!leftCol || !rightCol) return;
+
+  const stackedQuery = window.matchMedia('(max-width: 980px)');
+
+  function syncRightColHeight() {
+    if (stackedQuery.matches) {
+      rightCol.style.height = '';
+      return;
+    }
+    rightCol.style.height = leftCol.getBoundingClientRect().height + 'px';
+  }
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(syncRightColHeight).observe(leftCol);
+  } else {
+    window.addEventListener('resize', syncRightColHeight);
+  }
+
+  if (stackedQuery.addEventListener) {
+    stackedQuery.addEventListener('change', syncRightColHeight);
+  } else if (stackedQuery.addListener) {
+    stackedQuery.addListener(syncRightColHeight);
+  }
+
+  window.addEventListener('load', syncRightColHeight);
+  syncRightColHeight();
+})();
