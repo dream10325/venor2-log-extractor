@@ -5,6 +5,13 @@
     '#0b7285', '#a12f5e', '#5d4037', '#37474f', '#6a1b9a'
   ];
 
+  const AUTO_READ_MS_PER_CHAR = 45;
+  const AUTO_READ_MAX_EXTRA = 6000;
+
+  function autoAdvanceDelay(charCount) {
+    return state.autoDelay + Math.min(AUTO_READ_MAX_EXTRA, (charCount || 0) * AUTO_READ_MS_PER_CHAR);
+  }
+
   const state = {
     script: [],
     speakers: {},
@@ -22,6 +29,7 @@
     typeTimer: null,
     typeSpeed: 28,
     autoDelay: 1200,
+    currentLineCharCount: 0,
     autoPlay: false,
     autoTimer: null,
     textStyle: {
@@ -127,6 +135,7 @@
     const textEl = $('vnText');
     const full = StageModule.displayTextFor(line, state.speakers) + StageModule.repeatSuffixSafe(line);
     const tokens = BBCodeModule.parseFormattedTokens(full);
+    state.currentLineCharCount = tokens.length;
     textEl.innerHTML = '';
     let i = 0;
     state.typing = true;
@@ -154,7 +163,7 @@
     if (state.autoPlay) {
       state.autoTimer = setTimeout(() => {
         if (!nextLine()) setAutoPlay(false);
-      }, state.autoDelay);
+      }, autoAdvanceDelay(state.currentLineCharCount));
     }
   }
 
@@ -182,13 +191,7 @@
     btn.textContent = on ? '自動播放中' : '自動播放';
     clearAutoTimer();
     if (on && !state.typing) onLineFullyShown();
-    if (on) {
-      // Turning autoplay on is an explicit "hide the bars now" signal —
-      // don't make the user wait through the idle timeout.
-      enterImmersiveModeInstant();
-    } else {
-      refreshImmersiveMode();
-    }
+    refreshImmersiveMode();
   }
 
   function editorCallbacks() {
@@ -364,12 +367,13 @@
   });
 
   $('exitPlayerBtn').addEventListener('click', closePlayer);
-  $('vnClickCatcher').addEventListener('click', handleAdvance);
+  $('vnClickCatcher').addEventListener('click', () => { hideImmersiveControlsNow(); handleAdvance(); });
 
-  $('prevLineBtn').addEventListener('click', () => { setAutoPlay(false); prevLine(); });
-  $('nextLineBtn').addEventListener('click', () => { setAutoPlay(false); handleAdvance(); });
+  $('prevLineBtn').addEventListener('click', () => { hideImmersiveControlsNow(); setAutoPlay(false); prevLine(); });
+  $('nextLineBtn').addEventListener('click', () => { hideImmersiveControlsNow(); setAutoPlay(false); handleAdvance(); });
   $('autoPlayBtn').addEventListener('click', () => { setAutoPlay(!state.autoPlay); });
   $('restartPlayBtn').addEventListener('click', () => {
+    hideImmersiveControlsNow();
     setAutoPlay(false);
     StageModule.resetStageSlots();
     showLine(0, { resetTyping: true });
@@ -422,18 +426,22 @@
     scheduleImmersiveIdle();
   }
 
-  function enterImmersiveMode() {
-    $('playerView').classList.add('immersive-mode');
-    wakeImmersiveControls();
+  // Hides the bars right away, no idle wait. Used for anything that means
+  // "advance / control the story" — clicks, key presses — as opposed to
+  // mouse movement, which is the only thing allowed to reveal the bars.
+  function hideImmersiveControlsNow() {
+    if (!$('playerView').classList.contains('immersive-mode')) return;
+    clearImmersiveIdleTimer();
+    $('playerView').classList.add('immersive-idle');
   }
 
-  // Same as enterImmersiveMode, but skips the "wake then wait" cycle and
-  // hides the bars immediately. Used when the user explicitly starts an
-  // action (autoplay) that signals "I want the clean view right now" —
-  // e.g. for screen recording — instead of the passive idle-timeout hide.
-  function enterImmersiveModeInstant() {
-    clearImmersiveIdleTimer();
-    $('playerView').classList.add('immersive-mode', 'immersive-idle');
+  // Entering immersive mode always starts hidden. The bars only ever get
+  // revealed by moving the mouse (wakeImmersiveControls) or hovering them
+  // directly (see mouseenter/mouseleave below) — never just by turning
+  // immersive mode on via fullscreen/autoplay.
+  function enterImmersiveMode() {
+    $('playerView').classList.add('immersive-mode');
+    hideImmersiveControlsNow();
   }
 
   function exitImmersiveMode() {
@@ -441,10 +449,6 @@
     clearImmersiveIdleTimer();
   }
 
-  // Immersive mode (hide top/bottom bars + cursor) turns on when either
-  // real fullscreen is active, or autoplay is running — since #playerView
-  // already covers the whole viewport, autoplay alone is enough to want
-  // a clean recording view without needing the OS fullscreen API.
   function refreshImmersiveMode() {
     if (isFullscreen() || state.autoPlay) {
       enterImmersiveMode();
@@ -453,9 +457,19 @@
     }
   }
 
+  function isInsideBars(target) {
+    return !!(target && target.closest && target.closest('.player-topbar, .player-controlbar'));
+  }
+
   $('playerView').addEventListener('mousemove', wakeImmersiveControls);
-  $('playerView').addEventListener('mousedown', wakeImmersiveControls);
-  $('playerView').addEventListener('keydown', wakeImmersiveControls);
+  $('playerView').addEventListener('mousedown', e => {
+    if (isInsideBars(e.target)) return;
+    hideImmersiveControlsNow();
+  });
+  $('playerView').addEventListener('keydown', e => {
+    if (isInsideBars(e.target)) return;
+    hideImmersiveControlsNow();
+  });
 
   const fsTopbarEl = document.querySelector('.player-topbar');
   const fsControlbarEl = document.querySelector('.player-controlbar');
@@ -585,6 +599,7 @@
     if ($('playerView').hidden) return;
     const tag = e.target.tagName;
     if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+    hideImmersiveControlsNow();
     if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
       e.preventDefault();
       handleAdvance();
