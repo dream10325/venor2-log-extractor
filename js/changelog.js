@@ -3,7 +3,8 @@ const CHANGELOG_DATA = [
     version: "v1.1.3",
     date: "2026-09-05",
     logs: [
-      "程式碼結構重構"
+      "程式碼結構重構",
+      "修正匯出html時立繪不亮"
     ]
   },
   {

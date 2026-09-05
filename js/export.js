@@ -37,6 +37,7 @@ const ExportModule = (function () {
         });
       }
       speakersOut[name] = {
+        name: sp.name || name,
         displayName: sp.displayName,
         color: sp.color,
         position: sp.position,
