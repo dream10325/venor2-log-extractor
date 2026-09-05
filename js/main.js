@@ -373,6 +373,13 @@
     $('playerPanel').hidden = !$('playerPanel').hidden;
   });
 
+  document.querySelectorAll('.settings-group-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const group = header.closest('.settings-group');
+      group.classList.toggle('open');
+    });
+  });
+
   document.querySelectorAll('.panel-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));

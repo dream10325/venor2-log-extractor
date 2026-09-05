@@ -1,5 +1,12 @@
 const CHANGELOG_DATA = [
-    {
+  {
+    version: "v1.1.4",
+    date: "2026-09-05",
+    logs: [
+      "嘗試改善播放器ui"
+    ]
+  },
+  {
     version: "v1.1.3",
     date: "2026-09-05",
     logs: [

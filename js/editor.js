@@ -293,11 +293,15 @@ const EditorModule = (function () {
           <div class="speaker-portraits-row">
             ${portraitCards || '<div class="play-hint">尚未匯入立繪</div>'}
           </div>
-          <div class="speaker-card-controls">
-            <label class="mini-file-btn">
-              批次匯入立繪圖片
-              <input type="file" accept="image/*" multiple data-role="batch-portrait" data-name="${ExtractorModule.escapeHtml(name)}">
-            </label>
+          <label class="mini-file-btn">
+            批次匯入立繪圖片
+            <input type="file" accept="image/*" multiple data-role="batch-portrait" data-name="${ExtractorModule.escapeHtml(name)}">
+          </label>
+          <button type="button" class="speaker-adv-toggle" data-role="speaker-adv-toggle" data-name="${ExtractorModule.escapeHtml(name)}">
+            <span>站位與微調</span>
+            <span class="speaker-adv-caret">▾</span>
+          </button>
+          <div class="speaker-adv-body" data-role="speaker-adv-body" data-name="${ExtractorModule.escapeHtml(name)}">
             <select class="pos-select" data-role="position" data-name="${ExtractorModule.escapeHtml(name)}">
               <option value="left" ${sp.position === 'left' ? 'selected' : ''}>預設靠左站位</option>
               <option value="center" ${sp.position === 'center' ? 'selected' : ''}>預設置中站位</option>
@@ -425,6 +429,14 @@ const EditorModule = (function () {
         callbacks.onRedraw();
       });
     });
+
+    box.querySelectorAll('[data-role=speaker-adv-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const body = btn.nextElementSibling;
+        const isOpen = body.classList.toggle('open');
+        btn.classList.toggle('open', isOpen);
+      });
+    });
   }
 
   function speakerLabelFor(line, speakers) {
@@ -501,60 +513,89 @@ const EditorModule = (function () {
         isFlipActive = sp.portraits[pIdx] ? !!sp.portraits[pIdx].flip : false;
       }
 
+      const previewText = (line.text || '').replace(/\s+/g, ' ').trim();
+      const previewShort = previewText.length > 26 ? previewText.slice(0, 26) + '…' : (previewText || '（空白）');
+
       return `
       <div class="line-row" draggable="true" data-index="${i}">
-        <div class="line-row-head">
+        <div class="line-row-head" data-role="line-summary" data-index="${i}">
           <span class="line-drag-handle" title="拖曳排序">☰</span>
           <span class="line-idx">#${i + 1}</span>
           <span class="line-tag ${line.type}">${line.type === 'chat' ? '對話' : '動作'}</span>
           <span class="line-speaker">${ExtractorModule.escapeHtml(speakerLabel)}</span>
+          <span class="line-preview">${ExtractorModule.escapeHtml(previewShort)}</span>
+          <span class="line-badges">${tags.join('')}</span>
+          <button type="button" class="line-expand-btn" data-role="line-expand-btn" data-index="${i}" title="展開/收合編輯">▾</button>
           <button type="button" class="line-del-btn" data-role="line-del" data-index="${i}" title="刪除本句">✕</button>
         </div>
-        <div class="line-fmt-bar" data-index="${i}">
-          <button type="button" class="fmt-btn" data-fmt="b" title="粗體"><b>B</b></button>
-          <button type="button" class="fmt-btn" data-fmt="i" title="斜體"><i>I</i></button>
-          <select class="fmt-select" data-fmt="size" title="字級">
-            <option value="">字級</option>
-            <option value="14">小</option>
-            <option value="20">中</option>
-            <option value="26">大</option>
-            <option value="34">特大</option>
-          </select>
-          <label class="fmt-color-label" title="選取文字顏色">
-            字色<input type="color" data-fmt="color" value="#ff5555">
-          </label>
-          <label class="fmt-color-label" title="選取文字底色">
-            底色<input type="color" data-fmt="bg" value="#ffee55">
-          </label>
-          <button type="button" class="fmt-btn-text" data-fmt="clear" title="清除選取樣式或整行樣式">清除樣式</button>
-        </div>
-        <textarea class="line-text-edit" data-role="line-text" data-index="${i}" rows="2">${ExtractorModule.escapeHtml(line.text)}</textarea>
-        <div class="line-row-actions">
-          ${narrationSpeakerSelectHtml}
-          ${portraitSelectHtml}
-          <button type="button" class="mini-file-btn ${isFlipActive ? 'active' : ''}" data-role="line-flip-btn" data-index="${i}">翻轉</button>
-          <label class="mini-file-btn" onclick="event.stopPropagation()">
-            畫面插圖
-            <input type="file" accept="image/*" data-role="line-illust" data-index="${i}">
-          </label>
-          <label class="mini-file-btn" onclick="event.stopPropagation()">
-            換背景
-            <input type="file" accept="image/*" data-role="line-bg" data-index="${i}">
-          </label>
-          <label class="mini-file-btn" onclick="event.stopPropagation()">
-            換BGM
-            <input type="file" accept="audio/*" data-role="line-bgm" data-index="${i}">
-          </label>
-          <button type="button" class="mini-file-btn" data-role="line-bgm-stop" data-index="${i}">停BGM</button>
-          <label class="mini-file-btn" onclick="event.stopPropagation()">
-            單句音效
-            <input type="file" accept="audio/*" data-role="line-sfx" data-index="${i}">
-          </label>
-          <input type="range" class="line-sfx-vol" min="0" max="1" step="0.05" value="${ov.sfxVolume !== undefined ? ov.sfxVolume : 0.9}" data-role="line-sfx-vol" data-index="${i}" title="音效音量" style="width:50px;">
-          <button type="button" class="mini-file-btn" data-role="line-insert-above" data-index="${i}">上方插入</button>
-          <button type="button" class="mini-file-btn" data-role="line-insert-below" data-index="${i}">下方插入</button>
-          ${tags.length ? `<button type="button" class="mini-file-btn" data-role="line-clear" data-index="${i}">清除指定</button>` : ''}
-          ${tags.join('')}
+        <div class="line-row-body" data-role="line-body" data-index="${i}">
+          <div class="line-detail-group">
+            <p class="line-detail-label">文字內容</p>
+            <div class="line-fmt-bar" data-index="${i}">
+              <button type="button" class="fmt-btn" data-fmt="b" title="粗體"><b>B</b></button>
+              <button type="button" class="fmt-btn" data-fmt="i" title="斜體"><i>I</i></button>
+              <select class="fmt-select" data-fmt="size" title="字級">
+                <option value="">字級</option>
+                <option value="14">小</option>
+                <option value="20">中</option>
+                <option value="26">大</option>
+                <option value="34">特大</option>
+              </select>
+              <label class="fmt-color-label" title="選取文字顏色">
+                字色<input type="color" data-fmt="color" value="#ff5555">
+              </label>
+              <label class="fmt-color-label" title="選取文字底色">
+                底色<input type="color" data-fmt="bg" value="#ffee55">
+              </label>
+              <button type="button" class="fmt-btn-text" data-fmt="clear" title="清除選取樣式或整行樣式">清除樣式</button>
+            </div>
+            <textarea class="line-text-edit" data-role="line-text" data-index="${i}" rows="2">${ExtractorModule.escapeHtml(line.text)}</textarea>
+          </div>
+
+          <div class="line-detail-group">
+            <p class="line-detail-label">立繪／站位</p>
+            <div class="line-detail-row">
+              ${narrationSpeakerSelectHtml}
+              ${portraitSelectHtml}
+              <button type="button" class="mini-file-btn ${isFlipActive ? 'active' : ''}" data-role="line-flip-btn" data-index="${i}">翻轉</button>
+            </div>
+          </div>
+
+          <div class="line-detail-group">
+            <p class="line-detail-label">場景素材</p>
+            <div class="line-detail-row">
+              <label class="mini-file-btn" onclick="event.stopPropagation()">
+                畫面插圖
+                <input type="file" accept="image/*" data-role="line-illust" data-index="${i}">
+              </label>
+              <label class="mini-file-btn" onclick="event.stopPropagation()">
+                換背景
+                <input type="file" accept="image/*" data-role="line-bg" data-index="${i}">
+              </label>
+              <label class="mini-file-btn" onclick="event.stopPropagation()">
+                換BGM
+                <input type="file" accept="audio/*" data-role="line-bgm" data-index="${i}">
+              </label>
+              <button type="button" class="mini-file-btn" data-role="line-bgm-stop" data-index="${i}">停BGM</button>
+            </div>
+          </div>
+
+          <div class="line-detail-group">
+            <p class="line-detail-label">音效</p>
+            <div class="line-detail-row">
+              <label class="mini-file-btn" onclick="event.stopPropagation()">
+                單句音效
+                <input type="file" accept="audio/*" data-role="line-sfx" data-index="${i}">
+              </label>
+              <input type="range" class="line-sfx-vol" min="0" max="1" step="0.05" value="${ov.sfxVolume !== undefined ? ov.sfxVolume : 0.9}" data-role="line-sfx-vol" data-index="${i}" title="音效音量" style="width:80px;">
+            </div>
+          </div>
+
+          <div class="line-detail-footer">
+            <button type="button" class="mini-file-btn" data-role="line-insert-above" data-index="${i}">上方插入</button>
+            <button type="button" class="mini-file-btn" data-role="line-insert-below" data-index="${i}">下方插入</button>
+            ${tags.length ? `<button type="button" class="mini-file-btn" data-role="line-clear" data-index="${i}">清除指定</button>` : ''}
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -599,6 +640,15 @@ const EditorModule = (function () {
           r.classList.remove('drag-over-top');
           r.classList.remove('drag-over-bottom');
         });
+      });
+    });
+
+    box.querySelectorAll('[data-role=line-expand-btn]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const row = btn.closest('.line-row');
+        const isOpen = row.classList.toggle('expanded');
+        btn.classList.toggle('is-open', isOpen);
       });
     });
 

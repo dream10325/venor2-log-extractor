@@ -346,6 +346,38 @@
 }
 .mini-file-btn:hover{ border-color:var(--accent); color:#fff; }
 .mini-file-btn input{ display:none; }
+.speaker-adv-toggle{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  width:100%;
+  background:#161618;
+  border:1px solid #2f2f36;
+  color:#b6b6bf;
+  border-radius:6px;
+  padding:7px 10px;
+  font-size:11.5px;
+  font-family:var(--sans);
+  cursor:pointer;
+}
+.speaker-adv-toggle:hover{ border-color:var(--accent); color:#fff; }
+.speaker-adv-caret{
+  font-size:10px;
+  color:#7a7a82;
+  transition:transform .15s ease;
+}
+.speaker-adv-toggle.open .speaker-adv-caret{ transform:rotate(-180deg); }
+
+.speaker-adv-body{
+  display:none;
+  flex-direction:column;
+  gap:8px;
+  padding-top:8px;
+  margin-top:2px;
+  border-top:1px dashed #2a2a30;
+}
+.speaker-adv-body.open{ display:flex; }
+
 .pos-select, .settings-select{
   background:#101012;
   border:1px solid #34343c;
@@ -381,7 +413,39 @@
   display:flex;
   align-items:center;
   gap:6px;
-  margin-bottom:4px;
+}
+
+.line-row-body{
+  display:none;
+  margin-top:9px;
+  padding-top:9px;
+  border-top:1px solid #2a2a30;
+}
+.line-row.expanded .line-row-body{ display:block; }
+
+.line-detail-group{ margin-bottom:12px; }
+.line-detail-group:last-of-type{ margin-bottom:0; }
+.line-detail-label{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:#6f6f78;
+  margin:0 0 6px;
+}
+.line-detail-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.line-detail-footer{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  padding-top:10px;
+  margin-top:2px;
+  border-top:1px dashed #2a2a30;
 }
 .line-drag-handle{
   cursor:grab;
@@ -406,7 +470,45 @@
   font-size:11px;
   color:#c9c9d1;
   font-weight:700;
-  margin-left:auto;
+  flex:0 0 auto;
+}
+.line-preview{
+  flex:1 1 auto;
+  min-width:20px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:11px;
+  color:#7a7a82;
+}
+.line-row.expanded .line-preview{
+  color:#54545c;
+}
+.line-badges{
+  display:flex;
+  gap:4px;
+  flex:0 0 auto;
+}
+.line-expand-btn{
+  flex:0 0 auto;
+  width:20px;
+  height:20px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:transparent;
+  border:1px solid #34343c;
+  border-radius:4px;
+  color:#9a9aa2;
+  font-size:10px;
+  cursor:pointer;
+  transition:transform .15s ease, color .15s ease, border-color .15s ease;
+}
+.line-expand-btn:hover{ color:#fff; border-color:var(--accent); }
+.line-expand-btn.is-open{
+  transform:rotate(-180deg);
+  color:#fff;
+  border-color:var(--accent);
 }
 .line-del-btn{
   background:transparent;
@@ -521,7 +623,82 @@
   font-family:var(--mono);
 }
 
+.settings-accordion{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.settings-group{
+  border:1px solid #2a2a30;
+  border-radius:9px;
+  background:#1a1a1e;
+  overflow:hidden;
+}
+
+.settings-group-header{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  background:transparent;
+  border:none;
+  padding:11px 12px;
+  cursor:pointer;
+  font-family:var(--sans);
+  text-align:left;
+}
+.settings-group-header:hover{ background:#202024; }
+
+.settings-group-title{
+  flex:1 1 auto;
+  font-size:12.5px;
+  font-weight:700;
+  color:#e2e2e6;
+}
+
+.settings-group-caret{
+  flex:0 0 auto;
+  font-size:11px;
+  color:#7a7a82;
+  transition:transform .15s ease;
+}
+.settings-group.open .settings-group-caret{ transform:rotate(-180deg); }
+
+.settings-group-body{
+  display:none;
+  padding:4px 14px 14px;
+  border-top:1px solid #2a2a30;
+}
+.settings-group.open .settings-group-body{ display:block; padding-top:12px; }
+
+.settings-subtitle{
+  font-size:10.5px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:#6f6f78;
+  margin:14px 0 8px;
+}
+.settings-subtitle:first-child{ margin-top:0; }
+
+.settings-field-inline{
+  display:flex;
+  gap:18px;
+  flex-wrap:wrap;
+}
+.settings-field-inline .toggle{ padding:4px 0; }
+
+.settings-color-item{ display:flex; flex-direction:column; gap:6px; }
+.settings-color-item label{ margin-bottom:0; }
+
+.settings-danger-zone{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px dashed #2f2f36;
+}
+
 .settings-field{ margin-bottom:14px; }
+.settings-field:last-child{ margin-bottom:0; }
 .settings-field label{
   display:block;
   font-size:11.5px;
