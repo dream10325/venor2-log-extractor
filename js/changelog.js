@@ -1,4 +1,11 @@
 const CHANGELOG_DATA = [
+    {
+    version: "v1.1.5",
+    date: "2026-09-06",
+    logs: [
+      "新增全螢幕模式"
+    ]
+  },
   {
     version: "v1.1.4",
     date: "2026-09-05",

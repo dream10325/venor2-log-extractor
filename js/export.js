@@ -222,7 +222,76 @@ function setAutoPlay(on){
   btn.textContent = on ? '自動播放中' : '自動播放';
   if (state.autoTimer){ clearTimeout(state.autoTimer); state.autoTimer = null; }
   if (on && !state.typing) onFullyShown();
+  refreshImmersiveMode();
 }
+
+function isFullscreen(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+}
+function toggleFullscreen(){
+  const el = $('app');
+  if (!isFullscreen()){
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (req) req.call(el);
+  } else {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    if (exit) exit.call(document);
+  }
+}
+function updateFullscreenBtn(){
+  const btn = $('fullscreenBtn');
+  if (btn) btn.textContent = isFullscreen() ? '⛶ 退出全螢幕' : '⛶ 全螢幕';
+  refreshImmersiveMode();
+}
+['fullscreenchange','webkitfullscreenchange','msfullscreenchange'].forEach(function(evt){
+  document.addEventListener(evt, updateFullscreenBtn);
+});
+
+var immersiveIdleTimer = null;
+var IMMERSIVE_IDLE_DELAY = 2200;
+function clearImmersiveIdleTimer(){ if (immersiveIdleTimer){ clearTimeout(immersiveIdleTimer); immersiveIdleTimer = null; } }
+function scheduleImmersiveIdle(){
+  clearImmersiveIdleTimer();
+  immersiveIdleTimer = setTimeout(function(){ $('app').classList.add('immersive-idle'); }, IMMERSIVE_IDLE_DELAY);
+}
+function wakeImmersiveControls(){
+  if (!$('app').classList.contains('immersive-mode')) return;
+  $('app').classList.remove('immersive-idle');
+  scheduleImmersiveIdle();
+}
+function enterImmersiveMode(){
+  $('app').classList.add('immersive-mode');
+  wakeImmersiveControls();
+}
+function exitImmersiveMode(){
+  $('app').classList.remove('immersive-mode', 'immersive-idle');
+  clearImmersiveIdleTimer();
+}
+// Immersive mode (hide top/bottom bars + cursor) turns on when either real
+// fullscreen is active, or autoplay is running — #app already covers the
+// whole viewport, so autoplay alone is enough to want a clean recording view.
+function refreshImmersiveMode(){
+  if (isFullscreen() || state.autoPlay) enterImmersiveMode();
+  else exitImmersiveMode();
+}
+$('app').addEventListener('mousemove', wakeImmersiveControls);
+$('app').addEventListener('mousedown', wakeImmersiveControls);
+document.addEventListener('keydown', wakeImmersiveControls);
+
+var fsTopbarEl = document.querySelector('.topbar');
+var fsControlbarEl = document.querySelector('.controlbar');
+[fsTopbarEl, fsControlbarEl].forEach(function(el){
+  if (!el) return;
+  el.addEventListener('mouseenter', function(){
+    if (!$('app').classList.contains('immersive-mode')) return;
+    clearImmersiveIdleTimer();
+    $('app').classList.remove('immersive-idle');
+  });
+  el.addEventListener('mouseleave', function(){
+    if (!$('app').classList.contains('immersive-mode')) return;
+    scheduleImmersiveIdle();
+  });
+});
 
 $('stage').addEventListener('click', advance);
 $('prevBtn').addEventListener('click', function(){ setAutoPlay(false); prevLine(); });
@@ -233,9 +302,12 @@ $('restartBtn').addEventListener('click', function(){
   StageModule.resetStageSlots();
   showLine(0, false);
 });
+$('fullscreenBtn').addEventListener('click', toggleFullscreen);
 document.addEventListener('keydown', function(e){
   if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight'){ e.preventDefault(); advance(); }
   else if (e.key === 'ArrowLeft'){ setAutoPlay(false); prevLine(); }
+  else if (e.key === 'a' || e.key === 'A'){ setAutoPlay(!state.autoPlay); }
+  else if (e.key === 'f' || e.key === 'F'){ toggleFullscreen(); }
 });
 
 const tryPlay = function(){
@@ -266,6 +338,14 @@ if (state.script.length) showLine(0, false);
 *{box-sizing:border-box;}
 html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Arial,"Microsoft JhengHei",sans-serif;}
 #app{position:fixed;inset:0;display:flex;flex-direction:column;}
+#app:fullscreen,#app:-webkit-full-screen,#app:-ms-fullscreen{width:100%;height:100%;background:#0b0b0d;}
+#app.immersive-mode .topbar,#app.immersive-mode .controlbar{position:absolute;left:0;right:0;z-index:30;opacity:1;transform:translateY(0);pointer-events:auto;transition:opacity .25s ease, transform .25s ease;}
+#app.immersive-mode .topbar{top:0;}
+#app.immersive-mode .controlbar{bottom:0;}
+#app.immersive-mode .stage{height:100%;}
+#app.immersive-mode.immersive-idle .topbar{opacity:0;transform:translateY(-10px);pointer-events:none;}
+#app.immersive-mode.immersive-idle .controlbar{opacity:0;transform:translateY(10px);pointer-events:none;}
+#app.immersive-mode.immersive-idle,#app.immersive-mode.immersive-idle *{cursor:none;}
 .topbar{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:8px 14px;background:#161618;border-bottom:1px solid #2a2a2e;font-size:13px;color:#9a9aa2;font-family:"Courier New",monospace;}
 .stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;background:#111114 radial-gradient(ellipse at 50% 30%, #1c1c22 0%, #0c0c0f 70%);display:flex;align-items:flex-end;justify-content:center;cursor:pointer;user-select:none;}
 .stage-bg{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .25s ease;opacity:0;}
@@ -312,7 +392,8 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     <button class="btn" id="nextBtn" type="button">下一句 ▶</button>
     <button class="btn" id="autoBtn" type="button">自動播放</button>
     <button class="btn" id="restartBtn" type="button">⟲ 從頭開始</button>
-    <span class="hint">空白鍵/Enter/→ 繼續 ←上一句</span>
+    <button class="btn" id="fullscreenBtn" type="button">⛶ 全螢幕</button>
+    <span class="hint">空白鍵/Enter/→ 繼續 ←上一句 A 自動播放 F 全螢幕</span>
   </div>
   <audio id="bgmAudio" loop></audio>
 </div>

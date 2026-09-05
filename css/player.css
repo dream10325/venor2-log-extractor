@@ -9,6 +9,44 @@
   font-family:var(--sans);
 }
 #playerView[hidden]{ display:none; }
+#playerView:fullscreen,
+#playerView:-webkit-full-screen,
+#playerView:-ms-fullscreen{
+  width:100%;
+  height:100%;
+  background:#0b0b0d;
+}
+
+/* Immersive mode: top/bottom bars become floating overlays over the stage
+   instead of taking up flex space, and fade out when idle. Triggered by
+   real fullscreen OR autoplay being on (see main.js refreshImmersiveMode). */
+#playerView.immersive-mode .player-topbar,
+#playerView.immersive-mode .player-controlbar{
+  position:absolute;
+  left:0;
+  right:0;
+  z-index:30;
+  opacity:1;
+  transform:translateY(0);
+  pointer-events:auto;
+  transition:opacity .25s ease, transform .25s ease;
+}
+#playerView.immersive-mode .player-topbar{ top:0; }
+#playerView.immersive-mode .player-controlbar{ bottom:0; }
+#playerView.immersive-mode .player-body{ height:100%; }
+
+#playerView.immersive-mode.immersive-idle .player-topbar{
+  opacity:0;
+  transform:translateY(-10px);
+  pointer-events:none;
+}
+#playerView.immersive-mode.immersive-idle .player-controlbar{
+  opacity:0;
+  transform:translateY(10px);
+  pointer-events:none;
+}
+#playerView.immersive-mode.immersive-idle,
+#playerView.immersive-mode.immersive-idle *{ cursor:none; }
 
 .player-topbar{
   flex:0 0 auto;

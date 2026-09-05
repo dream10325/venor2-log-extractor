@@ -182,6 +182,13 @@
     btn.textContent = on ? '自動播放中' : '自動播放';
     clearAutoTimer();
     if (on && !state.typing) onLineFullyShown();
+    if (on) {
+      // Turning autoplay on is an explicit "hide the bars now" signal —
+      // don't make the user wait through the idle timeout.
+      enterImmersiveModeInstant();
+    } else {
+      refreshImmersiveMode();
+    }
   }
 
   function editorCallbacks() {
@@ -369,6 +376,102 @@
   });
   $('exportHtmlBtn').addEventListener('click', exportStandaloneHtml);
 
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+  }
+
+  function toggleFullscreen() {
+    const el = $('playerView');
+    if (!isFullscreen()) {
+      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (req) req.call(el);
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      if (exit) exit.call(document);
+    }
+  }
+
+  function updateFullscreenBtn() {
+    const btn = $('fullscreenBtn');
+    if (btn) btn.textContent = isFullscreen() ? '⛶ 退出全螢幕' : '⛶ 全螢幕';
+    refreshImmersiveMode();
+  }
+
+  $('fullscreenBtn').addEventListener('click', toggleFullscreen);
+  ['fullscreenchange', 'webkitfullscreenchange', 'msfullscreenchange'].forEach(evt => {
+    document.addEventListener(evt, updateFullscreenBtn);
+  });
+
+  let immersiveIdleTimer = null;
+  const IMMERSIVE_IDLE_DELAY = 2200;
+
+  function clearImmersiveIdleTimer() {
+    if (immersiveIdleTimer) { clearTimeout(immersiveIdleTimer); immersiveIdleTimer = null; }
+  }
+
+  function scheduleImmersiveIdle() {
+    clearImmersiveIdleTimer();
+    immersiveIdleTimer = setTimeout(() => {
+      $('playerView').classList.add('immersive-idle');
+    }, IMMERSIVE_IDLE_DELAY);
+  }
+
+  function wakeImmersiveControls() {
+    if (!$('playerView').classList.contains('immersive-mode')) return;
+    $('playerView').classList.remove('immersive-idle');
+    scheduleImmersiveIdle();
+  }
+
+  function enterImmersiveMode() {
+    $('playerView').classList.add('immersive-mode');
+    wakeImmersiveControls();
+  }
+
+  // Same as enterImmersiveMode, but skips the "wake then wait" cycle and
+  // hides the bars immediately. Used when the user explicitly starts an
+  // action (autoplay) that signals "I want the clean view right now" —
+  // e.g. for screen recording — instead of the passive idle-timeout hide.
+  function enterImmersiveModeInstant() {
+    clearImmersiveIdleTimer();
+    $('playerView').classList.add('immersive-mode', 'immersive-idle');
+  }
+
+  function exitImmersiveMode() {
+    $('playerView').classList.remove('immersive-mode', 'immersive-idle');
+    clearImmersiveIdleTimer();
+  }
+
+  // Immersive mode (hide top/bottom bars + cursor) turns on when either
+  // real fullscreen is active, or autoplay is running — since #playerView
+  // already covers the whole viewport, autoplay alone is enough to want
+  // a clean recording view without needing the OS fullscreen API.
+  function refreshImmersiveMode() {
+    if (isFullscreen() || state.autoPlay) {
+      enterImmersiveMode();
+    } else {
+      exitImmersiveMode();
+    }
+  }
+
+  $('playerView').addEventListener('mousemove', wakeImmersiveControls);
+  $('playerView').addEventListener('mousedown', wakeImmersiveControls);
+  $('playerView').addEventListener('keydown', wakeImmersiveControls);
+
+  const fsTopbarEl = document.querySelector('.player-topbar');
+  const fsControlbarEl = document.querySelector('.player-controlbar');
+  [fsTopbarEl, fsControlbarEl].forEach(el => {
+    if (!el) return;
+    el.addEventListener('mouseenter', () => {
+      if (!$('playerView').classList.contains('immersive-mode')) return;
+      clearImmersiveIdleTimer();
+      $('playerView').classList.remove('immersive-idle');
+    });
+    el.addEventListener('mouseleave', () => {
+      if (!$('playerView').classList.contains('immersive-mode')) return;
+      scheduleImmersiveIdle();
+    });
+  });
+
   $('togglePanelBtn').addEventListener('click', () => {
     $('playerPanel').hidden = !$('playerPanel').hidden;
   });
@@ -488,7 +591,12 @@
     } else if (e.key === 'ArrowLeft') {
       setAutoPlay(false);
       prevLine();
+    } else if (e.key === 'f' || e.key === 'F') {
+      toggleFullscreen();
+    } else if (e.key === 'a' || e.key === 'A') {
+      setAutoPlay(!state.autoPlay);
     } else if (e.key === 'Escape') {
+      if (isFullscreen()) return;
       closePlayer();
     }
   });
