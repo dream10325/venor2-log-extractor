@@ -37,8 +37,8 @@
 
   function $(id) { return document.getElementById(id); }
 
-  function lineKey(e) {
-    return `${e.type}|${e.player || ''}|${e.text}`;
+  function lineKey(e, idx) {
+    return `line_${idx}`;
   }
 
   function colorForSpeaker(name) {
@@ -69,22 +69,22 @@
   }
 
   function getSourceEntries() {
-    if (typeof lastFiltered !== 'undefined' && lastFiltered.length) return lastFiltered;
-    if (typeof entries !== 'undefined' && entries.length) {
-      lastFiltered = runFilter();
-      renderOutput(lastFiltered);
-      return lastFiltered;
+    const lastFiltered = ExtractorModule.getLastFiltered();
+    if (lastFiltered.length) return lastFiltered;
+    const entries = ExtractorModule.getEntries();
+    if (entries.length) {
+      return ExtractorModule.runFilterAndRender();
     }
     return [];
   }
 
   function buildScript(src) {
-    state.script = src.map(e => ({
+    state.script = src.map((e, i) => ({
       type: e.type,
       player: e.player,
       text: e.text,
       count: e.count,
-      key: lineKey(e),
+      key: lineKey(e, i),
     }));
     state.script.forEach(line => {
       if (line.player) ensureSpeaker(line.player);
@@ -311,7 +311,7 @@
     btn.textContent = '匯出中（素材較多可能要等一下）';
     try {
       const payload = await ExportModule.buildExportPayload(state);
-      const html = ExportModule.buildStandaloneHtml(payload);
+      const html = await ExportModule.buildStandaloneHtml(payload);
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

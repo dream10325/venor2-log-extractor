@@ -32,7 +32,7 @@ const ExportModule = (function () {
       for (const p of (sp.portraits || [])) {
         portsOut.push({
           name: p.name,
-          data: p.file ? await fileToDataURL(p.file) : p.url,
+          url: p.file ? await fileToDataURL(p.file) : p.url,
           flip: !!p.flip
         });
       }
@@ -55,17 +55,18 @@ const ExportModule = (function () {
       if (ov.speaker) out.speaker = ov.speaker;
       if (ov.portraitIdx !== undefined && ov.portraitIdx !== null) out.portraitIdx = ov.portraitIdx;
       if (ov.flip !== undefined) out.flip = ov.flip;
-      if (ov.bgFile) out.bg = await fileToDataURL(ov.bgFile);
-      else if (ov.bgURL && ov.bgURL.startsWith('data:')) out.bg = ov.bgURL;
-      if (ov.illustFile) out.illust = await fileToDataURL(ov.illustFile);
-      else if (ov.illustURL && ov.illustURL.startsWith('data:')) out.illust = ov.illustURL;
-      if (ov.sfxFile) out.sfx = await fileToDataURL(ov.sfxFile);
-      else if (ov.sfxURL && ov.sfxURL.startsWith('data:')) out.sfx = ov.sfxURL;
+      if (ov.bgFile) out.bgURL = await fileToDataURL(ov.bgFile);
+      else if (ov.bgURL && ov.bgURL.startsWith('data:')) out.bgURL = ov.bgURL;
+      if (ov.illustFile) out.illustURL = await fileToDataURL(ov.illustFile);
+      else if (ov.illustURL && ov.illustURL.startsWith('data:')) out.illustURL = ov.illustURL;
+      if (ov.sfxFile) out.sfxURL = await fileToDataURL(ov.sfxFile);
+      else if (ov.sfxURL && ov.sfxURL.startsWith('data:')) out.sfxURL = ov.sfxURL;
       if (ov.sfxVolume !== undefined) out.sfxVolume = ov.sfxVolume;
       if (ov.bgmAction) {
         out.bgmAction = ov.bgmAction;
-        if (ov.bgmFile) out.bgm = await fileToDataURL(ov.bgmFile);
-        else if (ov.bgmURL && ov.bgmURL.startsWith('data:')) out.bg = ov.bgmURL;
+        if (ov.bgmFile) out.bgmURL = await fileToDataURL(ov.bgmFile);
+        else if (ov.bgmURL && ov.bgmURL.startsWith('data:')) out.bgmURL = ov.bgmURL;
+        if (out.bgmURL) out.bgmName = ov.bgmName || '';
       }
       if (Object.keys(out).length) overridesOut[key] = out;
     }
@@ -74,8 +75,9 @@ const ExportModule = (function () {
       script: state.script.map(l => ({ type: l.type, player: l.player, text: l.text, count: l.count, key: l.key })),
       speakers: speakersOut,
       overrides: overridesOut,
-      defaultBg: state.defaultBgFile ? await fileToDataURL(state.defaultBgFile) : (state.defaultBgURL && state.defaultBgURL.startsWith('data:') ? state.defaultBgURL : null),
-      defaultBgm: state.defaultBgmFile ? await fileToDataURL(state.defaultBgmFile) : (state.defaultBgmURL && state.defaultBgmURL.startsWith('data:') ? state.defaultBgmURL : null),
+      defaultBgURL: state.defaultBgFile ? await fileToDataURL(state.defaultBgFile) : (state.defaultBgURL && state.defaultBgURL.startsWith('data:') ? state.defaultBgURL : null),
+      defaultBgmURL: state.defaultBgmFile ? await fileToDataURL(state.defaultBgmFile) : (state.defaultBgmURL && state.defaultBgmURL.startsWith('data:') ? state.defaultBgmURL : null),
+      defaultBgmName: state.defaultBgmName || '',
       bgmVolume: state.bgmVolume,
       sfxVolume: AudioModule.getGlobalSfxVolume(),
       typeSpeed: state.typeSpeed,
@@ -84,10 +86,165 @@ const ExportModule = (function () {
     };
   }
 
-  function buildStandaloneHtml(payload) {
+  async function fetchModuleSource(path) {
+    let res;
+    try {
+      res = await fetch(path);
+    } catch (err) {
+      throw new Error('無法讀取 ' + path + '（請以伺服器方式開啟本頁面，而非直接雙擊開啟本機檔案）');
+    }
+    if (!res.ok) throw new Error('無法讀取 ' + path + '（HTTP ' + res.status + '）');
+    return await res.text();
+  }
+
+  async function buildStandaloneHtml(payload) {
+    const [bbcodeSrc, audioSrc, stageSrc] = await Promise.all([
+      fetchModuleSource('js/bbcode.js'),
+      fetchModuleSource('js/audio.js'),
+      fetchModuleSource('js/stage.js')
+    ]);
+
     const json = JSON.stringify(payload)
       .replace(/</g, '\\u003c')
       .replace(/-->/g, '--\\u003e');
+
+    const playerScript = `
+function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+${bbcodeSrc}
+
+${audioSrc}
+
+${stageSrc}
+
+const DATA = ${json};
+
+const state = {
+  script: DATA.script,
+  speakers: DATA.speakers,
+  lineOverrides: DATA.overrides,
+  defaultBgURL: DATA.defaultBgURL || null,
+  defaultBgmURL: DATA.defaultBgmURL || null,
+  defaultBgmName: DATA.defaultBgmName || '',
+  bgmVolume: DATA.bgmVolume != null ? DATA.bgmVolume : 0.6,
+  currentBgmKey: null,
+  index: 0,
+  typing: false,
+  typeTimer: null,
+  typeSpeed: DATA.typeSpeed || 28,
+  autoDelay: DATA.autoDelay || 1200,
+  autoPlay: false,
+  autoTimer: null
+};
+
+if (DATA.sfxVolume != null) AudioModule.setGlobalSfxVolume(DATA.sfxVolume);
+if (DATA.textStyle) StageModule.applyTextStyle(DATA.textStyle);
+
+function $(id){ return document.getElementById(id); }
+
+function showLine(idx, redrawOnly){
+  if (idx < 0 || idx >= state.script.length) return;
+  state.index = idx;
+  if (state.autoTimer){ clearTimeout(state.autoTimer); state.autoTimer = null; }
+
+  const line = state.script[idx];
+  const ov = state.lineOverrides[line.key] || {};
+  const sp = line.player ? state.speakers[line.player] : null;
+
+  $('vnProgress').textContent = (idx + 1) + ' / ' + state.script.length;
+
+  const bgURL = StageModule.resolveBackgroundURL(idx, state.script, state.lineOverrides, state.defaultBgURL);
+  StageModule.renderStage(line, ov, sp, bgURL, state.speakers);
+  AudioModule.updateBgmForLine(idx, state);
+
+  if (!redrawOnly && ov.sfxURL) AudioModule.playSfx(ov.sfxURL, ov.sfxVolume);
+  if (redrawOnly) return;
+
+  if (state.typeTimer){ clearInterval(state.typeTimer); state.typeTimer = null; }
+  const textEl = $('vnText');
+  const full = StageModule.displayTextFor(line, state.speakers) + StageModule.repeatSuffixSafe(line);
+  const tokens = BBCodeModule.parseFormattedTokens(full);
+  textEl.innerHTML = '';
+  let i = 0;
+  state.typing = true;
+  state.typeTimer = setInterval(function(){
+    i++;
+    textEl.innerHTML = BBCodeModule.tokensToHtml(tokens.slice(0, i));
+    if (i >= tokens.length){
+      clearInterval(state.typeTimer);
+      state.typeTimer = null;
+      state.typing = false;
+      onFullyShown();
+    }
+  }, Math.max(6, state.typeSpeed));
+}
+
+function completeTyping(){
+  if (!state.typing) return;
+  clearInterval(state.typeTimer);
+  state.typeTimer = null;
+  state.typing = false;
+  const line = state.script[state.index];
+  const full = StageModule.displayTextFor(line, state.speakers) + StageModule.repeatSuffixSafe(line);
+  const tokens = BBCodeModule.parseFormattedTokens(full);
+  $('vnText').innerHTML = BBCodeModule.tokensToHtml(tokens);
+  onFullyShown();
+}
+
+function onFullyShown(){
+  if (state.autoPlay){
+    state.autoTimer = setTimeout(function(){
+      if (!nextLine()) setAutoPlay(false);
+    }, state.autoDelay);
+  }
+}
+
+function nextLine(){
+  if (state.index >= state.script.length - 1) return false;
+  showLine(state.index + 1, false);
+  return true;
+}
+function prevLine(){
+  if (state.index <= 0) return false;
+  showLine(state.index - 1, false);
+  return true;
+}
+function advance(){
+  if (state.typing) completeTyping();
+  else nextLine();
+}
+function setAutoPlay(on){
+  state.autoPlay = on;
+  const btn = $('autoBtn');
+  btn.classList.toggle('autoplay-on', on);
+  btn.textContent = on ? '自動播放中' : '自動播放';
+  if (state.autoTimer){ clearTimeout(state.autoTimer); state.autoTimer = null; }
+  if (on && !state.typing) onFullyShown();
+}
+
+$('stage').addEventListener('click', advance);
+$('prevBtn').addEventListener('click', function(){ setAutoPlay(false); prevLine(); });
+$('nextBtn').addEventListener('click', function(){ setAutoPlay(false); advance(); });
+$('autoBtn').addEventListener('click', function(){ setAutoPlay(!state.autoPlay); });
+$('restartBtn').addEventListener('click', function(){
+  setAutoPlay(false);
+  StageModule.resetStageSlots();
+  showLine(0, false);
+});
+document.addEventListener('keydown', function(e){
+  if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight'){ e.preventDefault(); advance(); }
+  else if (e.key === 'ArrowLeft'){ setAutoPlay(false); prevLine(); }
+});
+
+const tryPlay = function(){
+  AudioModule.updateBgmForLine(state.index, state);
+  document.removeEventListener('click', tryPlay);
+};
+document.addEventListener('click', tryPlay);
+
+if (state.script.length) showLine(0, false);
+`;
+
     return `<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -118,7 +275,7 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
 .stage-illust{position:absolute;top:45%;left:50%;transform:translate(-50%, -50%) scale(0.92);z-index:3;pointer-events:none;opacity:0;transition:opacity 0.22s ease, transform 0.22s ease;max-width:80%;max-height:55%;display:flex;align-items:center;justify-content:center;}
 .stage-illust.active{opacity:1;transform:translate(-50%, -50%) scale(1);}
 .stage-illust img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 12px 32px rgba(0,0,0,0.8));border-radius:8px;}
-.vn-box{position:relative;z-index:4;width:min(1000px,92%);margin:0 0 26px;border:1px solid #3a3a44;border-radius:12px;padding:16px 22px 20px;backdrop-filter:blur(3px);min-height:112px;box-shadow:0 12px 32px rgba(0,0,0,.5);}
+.vn-box{position:relative;z-index:4;width:min(1000px,92%);margin:0 0 26px;background:var(--vn-box-bg, rgba(14,14,17,.86));border:1px solid #3a3a44;border-radius:12px;padding:16px 22px 20px;backdrop-filter:blur(3px);min-height:112px;box-shadow:0 12px 32px rgba(0,0,0,.5);}
 .vn-name{display:inline-block;font-weight:700;font-size:15px;padding:3px 14px;border-radius:20px;margin-bottom:8px;background:var(--vn-name-color,#800020);color:#fff;}
 .vn-box.narration .vn-name{display:none;}
 .vn-text{font-family:var(--vn-font-family);font-size:var(--vn-font-size);font-weight:var(--vn-font-weight);font-style:var(--vn-font-style);color:var(--vn-text-color);line-height:1.75;white-space:pre-wrap;word-break:break-word;min-height:2.6em;}
@@ -159,333 +316,13 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
 </div>
 <script>
 (function(){
-  const DATA = ${json};
-  const state = { index:0, typing:false, typeTimer:null, autoPlay:false, autoTimer:null, currentBgmKey:null };
-  const stageSlots = { left:null, center:null, right:null };
-  function $(id){ return document.getElementById(id); }
-  function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
-  function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function repeatSuffix(l){ return (l.count && l.count > 1) ? ' (x' + l.count + ')' : ''; }
-
-  const boxBg = DATA.textStyle ? DATA.textStyle.boxBgColor : '#0e0e11';
-  const boxOp = DATA.textStyle ? DATA.textStyle.boxOpacity : 0.86;
-  const r = parseInt(boxBg.slice(1,3), 16) || 14;
-  const g = parseInt(boxBg.slice(3,5), 16) || 14;
-  const b = parseInt(boxBg.slice(5,7), 16) || 17;
-  $('vnBox').style.background = "rgba(" + r + "," + g + "," + b + "," + boxOp + ")";
-
-  function parseFormattedTokens(text) {
-    const regex = /\\[(\\/?)(b|i|color|bg|size)(?:=([^\\]]+))?\\]/gi;
-    const stack = [];
-    const tokens = [];
-    let lastIndex = 0;
-    let m;
-    function getActiveStyle() {
-      const st = {};
-      for (let j = 0; j < stack.length; j++) {
-        const item = stack[j];
-        if (item.tag === 'b') st.bold = true;
-        else if (item.tag === 'i') st.italic = true;
-        else if (item.tag === 'color') st.color = item.val;
-        else if (item.tag === 'bg') st.bg = item.val;
-        else if (item.tag === 'size') st.size = item.val;
-      }
-      return st;
-    }
-    while ((m = regex.exec(text)) !== null) {
-      const plain = text.slice(lastIndex, m.index);
-      if (plain) {
-        const currentStyle = getActiveStyle();
-        for (let j = 0; j < plain.length; j++) tokens.push({ char: plain[j], style: currentStyle });
-      }
-      const isClosing = m[1] === '/';
-      const tag = m[2].toLowerCase();
-      const val = m[3];
-      if (isClosing) {
-        for (let i = stack.length - 1; i >= 0; i--) {
-          if (stack[i].tag === tag) { stack.splice(i, 1); break; }
-        }
-      } else {
-        stack.push({ tag: tag, val: val });
-      }
-      lastIndex = regex.lastIndex;
-    }
-    const tail = text.slice(lastIndex);
-    if (tail) {
-      const currentStyle = getActiveStyle();
-      for (let j = 0; j < tail.length; j++) tokens.push({ char: tail[j], style: currentStyle });
-    }
-    return tokens;
-  }
-
-  function tokensToHtml(tokens) {
-    if (!tokens || !tokens.length) return '';
-    let html = '';
-    function isSameStyle(s1, s2) {
-      if (!s1 || !s2) return s1 === s2;
-      return s1.bold === s2.bold && s1.italic === s2.italic && s1.color === s2.color && s1.bg === s2.bg && s1.size === s2.size;
-    }
-    function buildStyleAttr(st) {
-      if (!st) return '';
-      const styles = [];
-      if (st.bold) styles.push('font-weight:bold');
-      if (st.italic) styles.push('font-style:italic');
-      if (st.color) styles.push('color:' + escapeHtml(st.color));
-      if (st.bg) styles.push('background-color:' + escapeHtml(st.bg) + ';border-radius:3px;padding:0 2px');
-      if (st.size) {
-        const s = /^\\d+$/.test(st.size) ? st.size + 'px' : st.size;
-        styles.push('font-size:' + escapeHtml(s));
-      }
-      return styles.length ? ' style="' + styles.join(';') + '"' : '';
-    }
-    let chunkText = '';
-    let chunkStyle = null;
-    for (let i = 0; i < tokens.length; i++) {
-      const t = tokens[i];
-      if (i === 0) {
-        chunkText = t.char; chunkStyle = t.style;
-      } else if (isSameStyle(t.style, chunkStyle)) {
-        chunkText += t.char;
-      } else {
-        const attr = buildStyleAttr(chunkStyle);
-        html += attr ? '<span' + attr + '>' + escapeHtml(chunkText) + '</span>' : escapeHtml(chunkText);
-        chunkText = t.char; chunkStyle = t.style;
-      }
-    }
-    if (chunkText) {
-      const attr = buildStyleAttr(chunkStyle);
-      html += attr ? '<span' + attr + '>' + escapeHtml(chunkText) + '</span>' : escapeHtml(chunkText);
-    }
-    return html;
-  }
-
-  function actionDisplayText(line){
-    if(line.type !== 'action' || !line.player) return line.text;
-    const sp = DATA.speakers[line.player];
-    if(!sp || sp.displayName === line.player) return line.text;
-    const name = line.player;
-    const text = line.text;
-    const prefixes = ['* ' + name + ' ', '* ' + name + '\\u3000'];
-    for(let i=0;i<prefixes.length;i++){
-      const p = prefixes[i];
-      if(text.indexOf(p) === 0) return '* ' + sp.displayName + ' ' + text.slice(p.length);
-    }
-    if(text === '* ' + name) return '* ' + sp.displayName;
-    return text;
-  }
-  function displayTextFor(line){ return line.type === 'action' ? actionDisplayText(line) : line.text; }
-
-  function getEffectiveBgm(idx){
-    for(let i = idx; i >= 0; i--){
-      const l = DATA.script[i];
-      const ov = DATA.overrides[l.key];
-      if(ov){
-        if(ov.bgmAction === 'stop') return null;
-        if(ov.bgmAction === 'set' && ov.bgm) return { key: 'line_' + i, url: ov.bgm };
-      }
-    }
-    return DATA.defaultBgm ? { key: 'default', url: DATA.defaultBgm } : null;
-  }
-
-  function getEffectiveBg(idx){
-    for(let i = idx; i >= 0; i--){
-      const l = DATA.script[i];
-      const ov = DATA.overrides[l.key];
-      if(ov && ov.bg) return ov.bg;
-    }
-    return DATA.defaultBg || null;
-  }
-
-  function updateBgm(idx){
-    const eff = getEffectiveBgm(idx);
-    const audio = $('bgmAudio');
-    if(!eff){
-      if(state.currentBgmKey !== null){ audio.pause(); audio.removeAttribute('src'); state.currentBgmKey = null; }
-      return;
-    }
-    if(state.currentBgmKey !== eff.key){
-      state.currentBgmKey = eff.key;
-      audio.src = eff.url;
-      audio.volume = DATA.bgmVolume != null ? DATA.bgmVolume : 0.6;
-      audio.loop = true;
-      audio.play().catch(function(){});
-    }
-  }
-
-  function resolvePortrait(sp, ov){
-    if(!sp || !sp.portraits || sp.portraits.length === 0) return null;
-    if(ov && ov.portraitIdx !== undefined && ov.portraitIdx !== null && sp.portraits[ov.portraitIdx]){
-      return sp.portraits[ov.portraitIdx].data;
-    }
-    const defIdx = sp.defaultPortraitIdx || 0;
-    return sp.portraits[defIdx] ? sp.portraits[defIdx].data : sp.portraits[0].data;
-  }
-
-  function applyTransform(slot, imgEl, sp, flip){
-    const scale = sp.scale || 1;
-    const offX = sp.offsetX || 0;
-    const offY = sp.offsetY || 0;
-    const scaleX = flip ? -1 : 1;
-    if(sp.position === 'center'){
-      slot.style.left = "calc(50% + " + offX + "px)";
-      slot.style.right = 'auto';
-      slot.style.transform = "translateX(-50%) translateY(" + offY + "px) scale(" + scale + ")";
-    } else if(sp.position === 'left'){
-      slot.style.left = "calc(2% + " + offX + "px)";
-      slot.style.right = 'auto';
-      slot.style.transform = "translateY(" + offY + "px) scale(" + scale + ")";
-    } else {
-      slot.style.left = 'auto';
-      slot.style.right = "calc(2% - " + offX + "px)";
-      slot.style.transform = "translateY(" + offY + "px) scale(" + scale + ")";
-    }
-    imgEl.style.transform = "scaleX(" + scaleX + ")";
-  }
-
-  function showLine(idx, redrawOnly){
-    if(idx < 0 || idx >= DATA.script.length) return;
-    state.index = idx;
-    if(state.autoTimer){ clearTimeout(state.autoTimer); state.autoTimer = null; }
-
-    const line = DATA.script[idx];
-    const ov = DATA.overrides[line.key] || {};
-    $('vnProgress').textContent = (idx+1) + ' / ' + DATA.script.length;
-
-    const bgURL = getEffectiveBg(idx);
-    const stageBg = $('stageBg');
-    if(bgURL){ stageBg.style.backgroundImage = "url('" + bgURL + "')"; stageBg.classList.add('on'); }
-    else { stageBg.classList.remove('on'); stageBg.style.backgroundImage = ''; }
-
-    const illustBox = $('stageIllust');
-    const illustImg = $('stageIllustImg');
-    if(ov.illust){ illustImg.src = ov.illust; illustBox.classList.add('active'); }
-    else { illustBox.classList.remove('active'); illustImg.removeAttribute('src'); }
-
-    updateBgm(idx);
-
-    const vnBox = $('vnBox');
-    let activeSpeakerName = null;
-    let targetSpeaker = null;
-
-    if(line.type === 'chat'){
-      vnBox.classList.remove('narration');
-      targetSpeaker = line.player ? DATA.speakers[line.player] : null;
-      $('vnName').textContent = targetSpeaker ? targetSpeaker.displayName : (line.player || '未知角色');
-      vnBox.style.setProperty('--vn-name-color', targetSpeaker ? targetSpeaker.color : '#800020');
-      activeSpeakerName = targetSpeaker ? targetSpeaker.name : null;
-    } else {
-      vnBox.classList.add('narration');
-      $('vnName').textContent = '';
-      if(ov.speaker && DATA.speakers[ov.speaker]){
-        targetSpeaker = DATA.speakers[ov.speaker];
-      } else if(line.player && DATA.speakers[line.player]){
-        targetSpeaker = DATA.speakers[line.player];
-      }
-      activeSpeakerName = targetSpeaker ? targetSpeaker.name : null;
-    }
-
-    if(targetSpeaker){
-      const pos = targetSpeaker.position || 'center';
-      const img = resolvePortrait(targetSpeaker, ov);
-      if(img){
-        const isFlip = (ov.flip !== undefined) ? !!ov.flip : (targetSpeaker.portraits && targetSpeaker.portraits[ov.portraitIdx || targetSpeaker.defaultPortraitIdx || 0] && !!targetSpeaker.portraits[ov.portraitIdx || targetSpeaker.defaultPortraitIdx || 0].flip);
-        stageSlots[pos] = { speaker: targetSpeaker, img: img, flip: isFlip };
-      }
-    }
-
-    ['left','center','right'].forEach(function(pos){
-      const posKey = capitalize(pos);
-      const slot = $('portrait' + posKey);
-      const imgEl = $('portrait' + posKey + 'Img');
-      const data = stageSlots[pos];
-      if(data && data.img){
-        imgEl.src = data.img;
-        applyTransform(slot, imgEl, data.speaker, data.flip);
-        slot.classList.add('active');
-        if(activeSpeakerName && data.speaker.name === activeSpeakerName){
-          slot.classList.remove('dimmed');
-        } else {
-          slot.classList.add('dimmed');
-        }
-      } else {
-        slot.classList.remove('active');
-        slot.classList.remove('dimmed');
-        slot.style.left = ''; slot.style.right = ''; slot.style.transform = '';
-        imgEl.style.transform = ''; imgEl.removeAttribute('src');
-      }
-    });
-
-    if(!redrawOnly && ov.sfx){
-      const sfx = new Audio(ov.sfx);
-      sfx.volume = ov.sfxVolume !== undefined ? ov.sfxVolume : (DATA.sfxVolume !== undefined ? DATA.sfxVolume : 0.9);
-      sfx.play().catch(function(){});
-    }
-    if(redrawOnly) return;
-
-    if(state.typeTimer){ clearInterval(state.typeTimer); state.typeTimer = null; }
-    const textEl = $('vnText');
-    const full = displayTextFor(line) + repeatSuffix(line);
-    const tokens = parseFormattedTokens(full);
-    textEl.innerHTML = '';
-    let i = 0;
-    state.typing = true;
-    state.typeTimer = setInterval(function(){
-      i++;
-      textEl.innerHTML = tokensToHtml(tokens.slice(0, i));
-      if(i >= tokens.length){
-        clearInterval(state.typeTimer); state.typeTimer = null; state.typing = false;
-        onFullyShown();
-      }
-    }, Math.max(6, DATA.typeSpeed || 28));
-  }
-
-  function completeTyping(){
-    if(!state.typing) return;
-    clearInterval(state.typeTimer); state.typeTimer = null; state.typing = false;
-    const line = DATA.script[state.index];
-    const full = displayTextFor(line) + repeatSuffix(line);
-    const tokens = parseFormattedTokens(full);
-    $('vnText').innerHTML = tokensToHtml(tokens);
-    onFullyShown();
-  }
-
-  function onFullyShown(){
-    if(state.autoPlay){
-      state.autoTimer = setTimeout(function(){ if(!nextLine()) setAutoPlay(false); }, DATA.autoDelay || 1200);
-    }
-  }
-
-  function nextLine(){ if(state.index >= DATA.script.length - 1) return false; showLine(state.index+1, false); return true; }
-  function prevLine(){ if(state.index <= 0) return false; showLine(state.index-1, false); return true; }
-  function advance(){ if(state.typing){ completeTyping(); } else { nextLine(); } }
-  function setAutoPlay(on){
-    state.autoPlay = on;
-    const btn = $('autoBtn');
-    btn.classList.toggle('autoplay-on', on);
-    btn.textContent = on ? '自動播放中' : '自動播放';
-    if(state.autoTimer){ clearTimeout(state.autoTimer); state.autoTimer = null; }
-    if(on && !state.typing) onFullyShown();
-  }
-
-  $('stage').addEventListener('click', advance);
-  $('prevBtn').addEventListener('click', function(){ setAutoPlay(false); prevLine(); });
-  $('nextBtn').addEventListener('click', function(){ setAutoPlay(false); advance(); });
-  $('autoBtn').addEventListener('click', function(){ setAutoPlay(!state.autoPlay); });
-  $('restartBtn').addEventListener('click', function(){ setAutoPlay(false); stageSlots.left=null; stageSlots.center=null; stageSlots.right=null; showLine(0, false); });
-  document.addEventListener('keydown', function(e){
-    if(e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight'){ e.preventDefault(); advance(); }
-    else if(e.key === 'ArrowLeft'){ setAutoPlay(false); prevLine(); }
-  });
-
-  const tryPlay = function(){ updateBgm(0); document.removeEventListener('click', tryPlay); };
-  document.addEventListener('click', tryPlay);
-
-  if(DATA.script.length){ showLine(0, false); }
+${playerScript}
 })();
 </script>
 </body>
 </html>`;
   }
+
 
   function parseExportedHtmlData(text) {
     const m = text.match(/const DATA = ([\s\S]*?);\s*const state = \{/);
@@ -503,8 +340,9 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
     Object.keys(data.speakers || {}).forEach(name => {
       const sp = data.speakers[name] || {};
       const ports = (sp.portraits || []).map(p => {
-        const file = dataURLtoFile(p.data, p.name);
-        return { name: p.name, file, url: p.data, flip: !!p.flip };
+        const url = p.url || p.data;
+        const file = dataURLtoFile(url, p.name);
+        return { name: p.name, file, url, flip: !!p.flip };
       });
       state.speakers[name] = {
         name,
@@ -528,24 +366,31 @@ html,body{margin:0;height:100%;background:#0b0b0d;color:#f2f2f2;font-family:Aria
       if (ov.speaker) out.speaker = ov.speaker;
       if (ov.portraitIdx !== undefined && ov.portraitIdx !== null) out.portraitIdx = ov.portraitIdx;
       if (ov.flip !== undefined) out.flip = ov.flip;
-      if (ov.bg) { const f = dataURLtoFile(ov.bg, 'line_bg'); out.bgURL = ov.bg; out.bgFile = f; out.bgName = f ? f.name : ''; }
-      if (ov.illust) { const f = dataURLtoFile(ov.illust, 'line_illust'); out.illustURL = ov.illust; out.illustFile = f; out.illustName = f ? f.name : ''; }
-      if (ov.sfx) { const f = dataURLtoFile(ov.sfx, 'line_sfx'); out.sfxURL = ov.sfx; out.sfxFile = f; out.sfxName = f ? f.name : ''; }
+      const bgURL = ov.bgURL || ov.bg;
+      const illustURL = ov.illustURL || ov.illust;
+      const sfxURL = ov.sfxURL || ov.sfx;
+      const bgmURL = ov.bgmURL || ov.bgm;
+      if (bgURL) { const f = dataURLtoFile(bgURL, 'line_bg'); out.bgURL = bgURL; out.bgFile = f; out.bgName = f ? f.name : ''; }
+      if (illustURL) { const f = dataURLtoFile(illustURL, 'line_illust'); out.illustURL = illustURL; out.illustFile = f; out.illustName = f ? f.name : ''; }
+      if (sfxURL) { const f = dataURLtoFile(sfxURL, 'line_sfx'); out.sfxURL = sfxURL; out.sfxFile = f; out.sfxName = f ? f.name : ''; }
       if (ov.sfxVolume !== undefined) out.sfxVolume = ov.sfxVolume;
       if (ov.bgmAction) {
         out.bgmAction = ov.bgmAction;
-        if (ov.bgm) { const f = dataURLtoFile(ov.bgm, 'line_bgm'); out.bgmURL = ov.bgm; out.bgmFile = f; out.bgmName = f ? f.name : ''; }
+        if (bgmURL) { const f = dataURLtoFile(bgmURL, 'line_bgm'); out.bgmURL = bgmURL; out.bgmFile = f; out.bgmName = ov.bgmName || (f ? f.name : ''); }
       }
       if (Object.keys(out).length) state.lineOverrides[key] = out;
     });
 
-    state.defaultBgURL = data.defaultBg || null;
-    state.defaultBgFile = data.defaultBg ? dataURLtoFile(data.defaultBg, 'default_bg') : null;
-    state.defaultBgName = state.defaultBgFile ? state.defaultBgFile.name : (data.defaultBg ? '（已匯入背景）' : '');
+    const defaultBgURL = data.defaultBgURL || data.defaultBg;
+    const defaultBgmURL = data.defaultBgmURL || data.defaultBgm;
 
-    state.defaultBgmURL = data.defaultBgm || null;
-    state.defaultBgmFile = data.defaultBgm ? dataURLtoFile(data.defaultBgm, 'default_bgm') : null;
-    state.defaultBgmName = state.defaultBgmFile ? state.defaultBgmFile.name : (data.defaultBgm ? '（已匯入BGM）' : '');
+    state.defaultBgURL = defaultBgURL || null;
+    state.defaultBgFile = defaultBgURL ? dataURLtoFile(defaultBgURL, 'default_bg') : null;
+    state.defaultBgName = state.defaultBgFile ? state.defaultBgFile.name : (defaultBgURL ? '（已匯入背景）' : '');
+
+    state.defaultBgmURL = defaultBgmURL || null;
+    state.defaultBgmFile = defaultBgmURL ? dataURLtoFile(defaultBgmURL, 'default_bgm') : null;
+    state.defaultBgmName = data.defaultBgmName || (state.defaultBgmFile ? state.defaultBgmFile.name : (defaultBgmURL ? '（已匯入BGM）' : ''));
 
     state.bgmVolume = (data.bgmVolume != null) ? data.bgmVolume : 0.6;
     if (data.sfxVolume != null) AudioModule.setGlobalSfxVolume(data.sfxVolume);

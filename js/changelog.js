@@ -1,4 +1,11 @@
 const CHANGELOG_DATA = [
+    {
+    version: "v1.1.3",
+    date: "2026-09-05",
+    logs: [
+      "程式碼結構重構"
+    ]
+  },
   {
     version: "v1.1.2",
     date: "2026-09-04",

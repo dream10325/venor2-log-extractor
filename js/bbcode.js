@@ -76,11 +76,11 @@ const BBCodeModule = (function () {
       const styles = [];
       if (st.bold) styles.push('font-weight:bold');
       if (st.italic) styles.push('font-style:italic');
-      if (st.color) styles.push(`color:${escapeHtml(st.color)}`);
-      if (st.bg) styles.push(`background-color:${escapeHtml(st.bg)};border-radius:3px;padding:0 2px`);
+      if (st.color) styles.push(`color:${ExtractorModule.escapeHtml(st.color)}`);
+      if (st.bg) styles.push(`background-color:${ExtractorModule.escapeHtml(st.bg)};border-radius:3px;padding:0 2px`);
       if (st.size) {
         const s = /^\d+$/.test(st.size) ? st.size + 'px' : st.size;
-        styles.push(`font-size:${escapeHtml(s)}`);
+        styles.push(`font-size:${ExtractorModule.escapeHtml(s)}`);
       }
       return styles.length ? ` style="${styles.join(';')}"` : '';
     }
@@ -97,14 +97,14 @@ const BBCodeModule = (function () {
         chunkText += t.char;
       } else {
         const attr = buildStyleAttr(chunkStyle);
-        html += attr ? `<span${attr}>${escapeHtml(chunkText)}</span>` : escapeHtml(chunkText);
+        html += attr ? `<span${attr}>${ExtractorModule.escapeHtml(chunkText)}</span>` : ExtractorModule.escapeHtml(chunkText);
         chunkText = t.char;
         chunkStyle = t.style;
       }
     }
     if (chunkText) {
       const attr = buildStyleAttr(chunkStyle);
-      html += attr ? `<span${attr}>${escapeHtml(chunkText)}</span>` : escapeHtml(chunkText);
+      html += attr ? `<span${attr}>${ExtractorModule.escapeHtml(chunkText)}</span>` : ExtractorModule.escapeHtml(chunkText);
     }
     return html;
   }

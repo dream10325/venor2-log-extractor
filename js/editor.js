@@ -7,18 +7,18 @@ const EditorModule = (function () {
     ta.focus();
   }
 
-  function getLineHistory(idx, initialVal) {
-    if (!lineUndoHistory[idx]) {
-      lineUndoHistory[idx] = {
+  function getLineHistory(key, initialVal) {
+    if (!lineUndoHistory[key]) {
+      lineUndoHistory[key] = {
         undo: [{ val: initialVal, start: 0, end: 0 }],
         redo: []
       };
     }
-    return lineUndoHistory[idx];
+    return lineUndoHistory[key];
   }
 
-  function pushUndoState(idx, ta) {
-    const hist = getLineHistory(idx, ta.value);
+  function pushUndoState(key, ta) {
+    const hist = getLineHistory(key, ta.value);
     const currentVal = ta.value;
     const last = hist.undo[hist.undo.length - 1];
     if (!last || last.val !== currentVal) {
@@ -32,9 +32,9 @@ const EditorModule = (function () {
     }
   }
 
-  function doUndo(idx, ta) {
+  function doUndo(key, ta) {
     clearTimeout(ta._typingTimer);
-    const hist = getLineHistory(idx, ta.value);
+    const hist = getLineHistory(key, ta.value);
     const last = hist.undo[hist.undo.length - 1];
     if (last && last.val !== ta.value) {
       hist.redo.push({
@@ -66,9 +66,9 @@ const EditorModule = (function () {
     ta._isHistoryAction = false;
   }
 
-  function doRedo(idx, ta) {
+  function doRedo(key, ta) {
     clearTimeout(ta._typingTimer);
-    const hist = getLineHistory(idx, ta.value);
+    const hist = getLineHistory(key, ta.value);
     if (hist.redo.length === 0) return;
     const next = hist.redo.pop();
     hist.undo.push({
@@ -84,8 +84,8 @@ const EditorModule = (function () {
     ta._isHistoryAction = false;
   }
 
-  function applySimpleTag(idx, ta, tag) {
-    pushUndoState(idx, ta);
+  function applySimpleTag(key, ta, tag) {
+    pushUndoState(key, ta);
     let start = ta.selectionStart;
     let end = ta.selectionEnd;
     const val = ta.value;
@@ -98,7 +98,7 @@ const EditorModule = (function () {
       ta.value = val.slice(0, start) + openTag + placeholder + closeTag + val.slice(end);
       ta.selectionStart = start + openTag.length;
       ta.selectionEnd = start + openTag.length + placeholder.length;
-      pushUndoState(idx, ta);
+      pushUndoState(key, ta);
       triggerInput(ta);
       return;
     }
@@ -109,7 +109,7 @@ const EditorModule = (function () {
       ta.value = val.slice(0, start - openTag.length) + val.slice(start, end) + val.slice(end + closeTag.length);
       ta.selectionStart = start - openTag.length;
       ta.selectionEnd = end - openTag.length;
-      pushUndoState(idx, ta);
+      pushUndoState(key, ta);
       triggerInput(ta);
       return;
     }
@@ -122,7 +122,7 @@ const EditorModule = (function () {
       ta.value = val.slice(0, start) + inner + val.slice(end);
       ta.selectionStart = start;
       ta.selectionEnd = start + inner.length;
-      pushUndoState(idx, ta);
+      pushUndoState(key, ta);
       triggerInput(ta);
       return;
     }
@@ -132,7 +132,7 @@ const EditorModule = (function () {
       ta.value = val.slice(0, start) + cleaned + val.slice(end);
       ta.selectionStart = start;
       ta.selectionEnd = start + cleaned.length;
-      pushUndoState(idx, ta);
+      pushUndoState(key, ta);
       triggerInput(ta);
       return;
     }
@@ -141,12 +141,12 @@ const EditorModule = (function () {
     ta.value = val.slice(0, start) + wrapped + val.slice(end);
     ta.selectionStart = start + openTag.length;
     ta.selectionEnd = start + openTag.length + sel.length;
-    pushUndoState(idx, ta);
+    pushUndoState(key, ta);
     triggerInput(ta);
   }
 
-  function applyParamTag(idx, ta, tag, paramVal) {
-    pushUndoState(idx, ta);
+  function applyParamTag(key, ta, tag, paramVal) {
+    pushUndoState(key, ta);
     let start = ta.selectionStart;
     let end = ta.selectionEnd;
     const val = ta.value;
@@ -158,7 +158,7 @@ const EditorModule = (function () {
       ta.value = val.slice(0, start) + openTag + placeholder + closeTag + val.slice(end);
       ta.selectionStart = start + openTag.length;
       ta.selectionEnd = start + openTag.length + placeholder.length;
-      pushUndoState(idx, ta);
+      pushUndoState(key, ta);
       triggerInput(ta);
       return;
     }
@@ -179,7 +179,7 @@ const EditorModule = (function () {
       const newStart = before.length - beforeMatch[0].length + openTag.length;
       ta.selectionStart = newStart;
       ta.selectionEnd = newStart + sel.length;
-      pushUndoState(idx, ta);
+      pushUndoState(key, ta);
       triggerInput(ta);
       return;
     }
@@ -194,7 +194,7 @@ const EditorModule = (function () {
       ta.value = before + newSel + after;
       ta.selectionStart = start + openTag.length;
       ta.selectionEnd = start + openTag.length + inner.length;
-      pushUndoState(idx, ta);
+      pushUndoState(key, ta);
       triggerInput(ta);
       return;
     }
@@ -205,12 +205,12 @@ const EditorModule = (function () {
     ta.value = before + wrapped + after;
     ta.selectionStart = start + openTag.length;
     ta.selectionEnd = start + openTag.length + cleanedSel.length;
-    pushUndoState(idx, ta);
+    pushUndoState(key, ta);
     triggerInput(ta);
   }
 
-  function clearFormatting(idx, ta) {
-    pushUndoState(idx, ta);
+  function clearFormatting(key, ta) {
+    pushUndoState(key, ta);
     let start = ta.selectionStart;
     let end = ta.selectionEnd;
     let val = ta.value;
@@ -220,7 +220,7 @@ const EditorModule = (function () {
       ta.value = cleaned;
       ta.selectionStart = 0;
       ta.selectionEnd = cleaned.length;
-      pushUndoState(idx, ta);
+      pushUndoState(key, ta);
       triggerInput(ta);
       return;
     }
@@ -245,7 +245,7 @@ const EditorModule = (function () {
     ta.value = before + sel + after;
     ta.selectionStart = before.length;
     ta.selectionEnd = before.length + sel.length;
-    pushUndoState(idx, ta);
+    pushUndoState(key, ta);
     triggerInput(ta);
   }
 
@@ -270,13 +270,13 @@ const EditorModule = (function () {
         <div class="portrait-thumbnail-wrap">
           <div class="portrait-thumbnail ${idx === (sp.defaultPortraitIdx || 0) ? 'active' : ''}" 
                style="background-image:url('${p.url}')" 
-               title="${escapeHtml(p.name)}（點擊設為預設）" 
+               title="${ExtractorModule.escapeHtml(p.name)}（點擊設為預設）" 
                data-role="set-default-port" 
-               data-name="${escapeHtml(name)}" 
+               data-name="${ExtractorModule.escapeHtml(name)}" 
                data-idx="${idx}"></div>
           <button type="button" class="portrait-thumb-flip-btn ${p.flip ? 'active' : ''}" 
                   data-role="toggle-portrait-flip" 
-                  data-name="${escapeHtml(name)}" 
+                  data-name="${ExtractorModule.escapeHtml(name)}" 
                   data-idx="${idx}">翻轉</button>
         </div>
       `).join('');
@@ -284,11 +284,11 @@ const EditorModule = (function () {
       return `
       <div class="speaker-card">
         <div class="speaker-card-head">
-          <input type="color" class="speaker-color-input" data-role="speakerColor" data-name="${escapeHtml(name)}" value="${sp.color}">
-          <input type="text" class="speaker-name-input" data-role="displayName" data-name="${escapeHtml(name)}" value="${escapeHtml(sp.displayName)}" placeholder="角色名稱">
+          <input type="color" class="speaker-color-input" data-role="speakerColor" data-name="${ExtractorModule.escapeHtml(name)}" value="${sp.color}">
+          <input type="text" class="speaker-name-input" data-role="displayName" data-name="${ExtractorModule.escapeHtml(name)}" value="${ExtractorModule.escapeHtml(sp.displayName)}" placeholder="角色名稱">
           <span class="speaker-card-count">${counts[name] || 0} 句</span>
         </div>
-        ${renamed ? `<p class="speaker-card-origname">原暱稱：${escapeHtml(name)}</p>` : ''}
+        ${renamed ? `<p class="speaker-card-origname">原暱稱：${ExtractorModule.escapeHtml(name)}</p>` : ''}
         <div class="speaker-card-body">
           <div class="speaker-portraits-row">
             ${portraitCards || '<div class="play-hint">尚未匯入立繪</div>'}
@@ -296,26 +296,26 @@ const EditorModule = (function () {
           <div class="speaker-card-controls">
             <label class="mini-file-btn">
               批次匯入立繪圖片
-              <input type="file" accept="image/*" multiple data-role="batch-portrait" data-name="${escapeHtml(name)}">
+              <input type="file" accept="image/*" multiple data-role="batch-portrait" data-name="${ExtractorModule.escapeHtml(name)}">
             </label>
-            <select class="pos-select" data-role="position" data-name="${escapeHtml(name)}">
+            <select class="pos-select" data-role="position" data-name="${ExtractorModule.escapeHtml(name)}">
               <option value="left" ${sp.position === 'left' ? 'selected' : ''}>預設靠左站位</option>
               <option value="center" ${sp.position === 'center' ? 'selected' : ''}>預設置中站位</option>
               <option value="right" ${sp.position === 'right' ? 'selected' : ''}>預設靠右站位</option>
             </select>
             <div class="slider-group">
-              <label>立繪大小縮放：<span id="scaleVal_${escapeHtml(name)}">${Math.round((sp.scale || 1) * 100)}%</span></label>
-              <input type="range" min="0.4" max="2.0" step="0.05" value="${sp.scale || 1}" data-role="portScale" data-name="${escapeHtml(name)}">
+              <label>立繪大小縮放：<span id="scaleVal_${ExtractorModule.escapeHtml(name)}">${Math.round((sp.scale || 1) * 100)}%</span></label>
+              <input type="range" min="0.4" max="2.0" step="0.05" value="${sp.scale || 1}" data-role="portScale" data-name="${ExtractorModule.escapeHtml(name)}">
             </div>
             <div class="slider-group">
-              <label>水平位置微調 (X)：<span id="offXVal_${escapeHtml(name)}">${sp.offsetX || 0}px</span></label>
-              <input type="range" min="-300" max="300" step="5" value="${sp.offsetX || 0}" data-role="portOffX" data-name="${escapeHtml(name)}">
+              <label>水平位置微調 (X)：<span id="offXVal_${ExtractorModule.escapeHtml(name)}">${sp.offsetX || 0}px</span></label>
+              <input type="range" min="-300" max="300" step="5" value="${sp.offsetX || 0}" data-role="portOffX" data-name="${ExtractorModule.escapeHtml(name)}">
             </div>
             <div class="slider-group">
-              <label>垂直位置微調 (Y)：<span id="offYVal_${escapeHtml(name)}">${sp.offsetY || 0}px</span></label>
-              <input type="range" min="-200" max="200" step="5" value="${sp.offsetY || 0}" data-role="portOffY" data-name="${escapeHtml(name)}">
+              <label>垂直位置微調 (Y)：<span id="offYVal_${ExtractorModule.escapeHtml(name)}">${sp.offsetY || 0}px</span></label>
+              <input type="range" min="-200" max="200" step="5" value="${sp.offsetY || 0}" data-role="portOffY" data-name="${ExtractorModule.escapeHtml(name)}">
             </div>
-            ${(sp.portraits && sp.portraits.length) ? `<button type="button" class="portrait-clear-btn" data-role="portrait-clear-all" data-name="${escapeHtml(name)}">清空所有立繪</button>` : ''}
+            ${(sp.portraits && sp.portraits.length) ? `<button type="button" class="portrait-clear-btn" data-role="portrait-clear-all" data-name="${ExtractorModule.escapeHtml(name)}">清空所有立繪</button>` : ''}
           </div>
         </div>
       </div>`;
@@ -475,7 +475,7 @@ const EditorModule = (function () {
           <select class="pos-select" style="max-width:110px;" data-role="line-speaker-select" data-index="${i}">
             <option value="">（不指定立繪）</option>
             ${allSpeakerNames.map(name => `
-              <option value="${escapeHtml(name)}" ${effectiveSpeakerName === name ? 'selected' : ''}>${escapeHtml(state.speakers[name].displayName)}</option>
+              <option value="${ExtractorModule.escapeHtml(name)}" ${effectiveSpeakerName === name ? 'selected' : ''}>${ExtractorModule.escapeHtml(state.speakers[name].displayName)}</option>
             `).join('')}
           </select>
         `;
@@ -487,7 +487,7 @@ const EditorModule = (function () {
           <select class="pos-select" style="max-width:110px;" data-role="line-portrait-select" data-index="${i}">
             <option value="">預設立繪</option>
             ${sp.portraits.map((p, pIdx) => `
-              <option value="${pIdx}" ${ov.portraitIdx === pIdx ? 'selected' : ''}>${escapeHtml(p.name)}</option>
+              <option value="${pIdx}" ${ov.portraitIdx === pIdx ? 'selected' : ''}>${ExtractorModule.escapeHtml(p.name)}</option>
             `).join('')}
           </select>
         `;
@@ -507,7 +507,7 @@ const EditorModule = (function () {
           <span class="line-drag-handle" title="拖曳排序">☰</span>
           <span class="line-idx">#${i + 1}</span>
           <span class="line-tag ${line.type}">${line.type === 'chat' ? '對話' : '動作'}</span>
-          <span class="line-speaker">${escapeHtml(speakerLabel)}</span>
+          <span class="line-speaker">${ExtractorModule.escapeHtml(speakerLabel)}</span>
           <button type="button" class="line-del-btn" data-role="line-del" data-index="${i}" title="刪除本句">✕</button>
         </div>
         <div class="line-fmt-bar" data-index="${i}">
@@ -528,7 +528,7 @@ const EditorModule = (function () {
           </label>
           <button type="button" class="fmt-btn-text" data-fmt="clear" title="清除選取樣式或整行樣式">清除樣式</button>
         </div>
-        <textarea class="line-text-edit" data-role="line-text" data-index="${i}" rows="2">${escapeHtml(line.text)}</textarea>
+        <textarea class="line-text-edit" data-role="line-text" data-index="${i}" rows="2">${ExtractorModule.escapeHtml(line.text)}</textarea>
         <div class="line-row-actions">
           ${narrationSpeakerSelectHtml}
           ${portraitSelectHtml}
@@ -604,6 +604,7 @@ const EditorModule = (function () {
 
     box.querySelectorAll('.line-fmt-bar').forEach(bar => {
       const idx = parseInt(bar.getAttribute('data-index'), 10);
+      const key = state.script[idx].key;
       const ta = bar.parentElement.querySelector('textarea[data-role=line-text]');
       let savedStart = 0;
       let savedEnd = 0;
@@ -628,9 +629,9 @@ const EditorModule = (function () {
           restoreSelection();
           const fmt = btn.getAttribute('data-fmt');
           if (fmt === 'b' || fmt === 'i') {
-            applySimpleTag(idx, ta, fmt);
+            applySimpleTag(key, ta, fmt);
           } else if (fmt === 'clear') {
-            clearFormatting(idx, ta);
+            clearFormatting(key, ta);
           }
         });
       });
@@ -641,7 +642,7 @@ const EditorModule = (function () {
         e.stopPropagation();
         if (!sizeSel.value) return;
         restoreSelection();
-        applyParamTag(idx, ta, 'size', sizeSel.value);
+        applyParamTag(key, ta, 'size', sizeSel.value);
         sizeSel.value = '';
       });
 
@@ -649,14 +650,14 @@ const EditorModule = (function () {
       colorInp.parentElement.addEventListener('click', e => e.stopPropagation());
       colorInp.addEventListener('change', e => {
         restoreSelection();
-        applyParamTag(idx, ta, 'color', colorInp.value);
+        applyParamTag(key, ta, 'color', colorInp.value);
       });
 
       const bgInp = bar.querySelector('input[data-fmt=bg]');
       bgInp.parentElement.addEventListener('click', e => e.stopPropagation());
       bgInp.addEventListener('change', e => {
         restoreSelection();
-        applyParamTag(idx, ta, 'bg', bgInp.value);
+        applyParamTag(key, ta, 'bg', bgInp.value);
       });
     });
 
@@ -669,16 +670,17 @@ const EditorModule = (function () {
 
     box.querySelectorAll('textarea[data-role=line-text]').forEach(ta => {
       const idx = parseInt(ta.getAttribute('data-index'), 10);
-      getLineHistory(idx, ta.value);
+      const key = state.script[idx].key;
+      getLineHistory(key, ta.value);
 
       ta.addEventListener('click', e => e.stopPropagation());
 
       ta.addEventListener('focus', () => {
-        pushUndoState(idx, ta);
+        pushUndoState(key, ta);
       });
 
       ta.addEventListener('compositionend', () => {
-        pushUndoState(idx, ta);
+        pushUndoState(key, ta);
       });
 
       ta.addEventListener('keydown', e => {
@@ -686,20 +688,20 @@ const EditorModule = (function () {
 
         const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
         const isCtrl = isMac ? e.metaKey : e.ctrlKey;
-        const key = e.key ? e.key.toLowerCase() : '';
+        const eventKey = e.key ? e.key.toLowerCase() : '';
 
-        const isUndo = isCtrl && key === 'z' && !e.shiftKey;
-        const isRedo = (isCtrl && key === 'y') || (isCtrl && key === 'z' && e.shiftKey);
+        const isUndo = isCtrl && eventKey === 'z' && !e.shiftKey;
+        const isRedo = (isCtrl && eventKey === 'y') || (isCtrl && eventKey === 'z' && e.shiftKey);
 
         if (isUndo) {
           e.preventDefault();
-          doUndo(idx, ta);
+          doUndo(key, ta);
           return;
         }
 
         if (isRedo) {
           e.preventDefault();
-          doRedo(idx, ta);
+          doRedo(key, ta);
           return;
         }
       });
@@ -714,7 +716,7 @@ const EditorModule = (function () {
 
         clearTimeout(ta._typingTimer);
         ta._typingTimer = setTimeout(() => {
-          pushUndoState(idx, ta);
+          pushUndoState(key, ta);
         }, 400);
       });
     });

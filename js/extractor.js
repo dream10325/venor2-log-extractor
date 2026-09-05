@@ -1,3 +1,5 @@
+const ExtractorModule = (function () {
+
 const MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
 
 const SERVER_CHAT_RE = /^\[(?:(\d{1,2}[A-Za-z]{3}\d{4})\s+)?(\d{2}:\d{2}:\d{2})(?:\.\d+)?\] \[[^\]]*\] \[nicknameforge\/\]: \[([^\]]+)\]\s*<(.+)>\{([^}]*)\}\s?(.*)$/;
@@ -473,12 +475,17 @@ function getPlainOutput(list){
 
 let lastFiltered = [];
 
+function runFilterAndRender(){
+  lastFiltered = runFilter();
+  renderOutput(lastFiltered);
+  return lastFiltered;
+}
+
 document.getElementById('runBtn').addEventListener('click', ()=>{
   if(entries.length === 0 && document.getElementById('rawInput').value.trim()){
     handleText(document.getElementById('rawInput').value);
   }
-  lastFiltered = runFilter();
-  renderOutput(lastFiltered);
+  runFilterAndRender();
 });
 
 document.getElementById('copyBtn').addEventListener('click', async ()=>{
@@ -508,3 +515,12 @@ document.getElementById('downloadBtn').addEventListener('click', ()=>{
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 });
+  return {
+    getEntries: () => entries,
+    getLastFiltered: () => lastFiltered,
+    runFilter,
+    runFilterAndRender,
+    renderOutput,
+    escapeHtml
+  };
+})();
